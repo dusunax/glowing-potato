@@ -21,7 +21,7 @@ export function getSpawnableItems(items: Item[], conditions: WorldConditions): I
 /** Picks a random item from a list with rarity-weighted probability. */
 export function pickRandomItem(items: Item[]): Item | null {
   if (items.length === 0) return null;
-  const weights: Record<string, number> = { common: 5, uncommon: 3, rare: 1 };
+  const weights: Record<string, number> = { common: 5, uncommon: 3, rare: 1, legendary: 1 };
   const pool = items.flatMap((item) =>
     Array(weights[item.rarity] ?? 1).fill(item)
   );

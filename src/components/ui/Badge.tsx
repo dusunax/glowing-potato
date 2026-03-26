@@ -12,6 +12,7 @@ const RARITY_CLASSES: Record<ItemRarity, string> = {
   common: 'bg-slate-600 text-slate-200',
   uncommon: 'bg-emerald-700 text-emerald-100',
   rare: 'bg-violet-700 text-violet-100',
+  legendary: 'bg-amber-600 text-amber-100',
 };
 
 export function Badge({ label, rarity, className = '' }: BadgeProps) {

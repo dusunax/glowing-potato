@@ -6,7 +6,8 @@ import type { Weather } from '../constants/weather';
 import type { TimePeriod } from '../constants/timePeriods';
 
 export type ItemId = string;
-export type ItemRarity = 'common' | 'uncommon' | 'rare';
+export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
+export type ItemCategory = 'flora' | 'mineral' | 'creature' | 'special' | 'crafted';
 
 export interface SpawnConditions {
   seasons?: Season[];
@@ -20,5 +21,7 @@ export interface Item {
   description: string;
   emoji: string;
   rarity: ItemRarity;
+  category: ItemCategory;
+  tags?: string[];
   spawnConditions: SpawnConditions;
 }

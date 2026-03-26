@@ -8,6 +8,14 @@ Explore a world governed by **seasons**, **weather**, and **time of day**. Colle
 that only appear under specific conditions, then craft them into rarer goods. Track your
 discoveries in the journal.
 
+## 🎮 How to Play
+
+1. Watch the **World Conditions** panel — it shows current season, weather, and time of day.
+2. Click **Collect** to search for items that spawn under the current conditions.
+3. Collect enough ingredients to **Craft** special items in the Crafting panel.
+4. Track everything you've discovered in your **Discovery** journal.
+5. Click **End Turn** to advance time and change conditions.
+
 ## Tech Stack
 
 | Tool          | Purpose                        |
@@ -40,6 +48,14 @@ docs/
   game-rules.md # Full game rules and extension guide
   roadmap.md    # Future feature ideas
 ```
+
+## 🌟 Features
+
+- **20+ unique collectable items** spanning flora, minerals, creatures, and special categories
+- **8 crafting recipes** including legendary items
+- **Dynamic spawn system** — items only appear under matching season/weather/time conditions
+- **Discovery journal** — track every item you have ever found
+- **Event log** — see what happened on each turn
 
 ## How to Extend
 
