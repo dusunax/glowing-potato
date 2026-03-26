@@ -1,65 +1,67 @@
-# 🌿 Petal Grove
+# 🌿 Glowing Potato
 
-A cozy pixel-style collection game prototype built with React + TypeScript + Vite.
+A cozy browser-based 2D collection game built with React, TypeScript, and Vite.
 
-Explore a magical grove, collect items based on the current time, weather, and season, craft unique items, and fill your discovery journal!
+## Game Concept
+
+Explore a world governed by **seasons**, **weather**, and **time of day**. Collect items
+that only appear under specific conditions, then craft them into rarer goods. Track your
+discoveries in the journal.
 
 ## 🎮 How to Play
 
 1. Watch the **World Conditions** panel — it shows current season, weather, and time of day.
-2. Click **Explore the Grove** to search for items that spawn under those conditions.
-3. Collect enough ingredients to **Craft** special items in the Crafting Table.
-4. Track everything you've discovered in your **Journal**.
-5. Use the **Pause** button to freeze time while you plan.
+2. Click **Collect** to search for items that spawn under the current conditions.
+3. Collect enough ingredients to **Craft** special items in the Crafting panel.
+4. Track everything you've discovered in your **Discovery** journal.
+5. Click **End Turn** to advance time and change conditions.
 
-## 📁 Folder Structure
+## Tech Stack
 
-```
-src/
-├── data/           # Game data (items, recipes, events)
-│   ├── items.ts    # Item definitions with spawn conditions
-│   ├── recipes.ts  # Crafting recipes
-│   └── events.ts   # World events and flavor text
-├── types/
-│   └── game.ts     # TypeScript interfaces
-├── hooks/
-│   ├── useGameClock.ts   # Time/weather/season simulation
-│   └── useGameState.ts   # Inventory, crafting, discovery logic
-└── components/
-    ├── GameHeader.tsx      # Top navigation bar
-    ├── ConditionsPanel.tsx # Season/weather/time display
-    ├── SpawnArea.tsx       # Grove exploration + collect button
-    ├── InventoryPanel.tsx  # Player's collected items
-    ├── CraftingPanel.tsx   # Recipe browser and crafting
-    └── DiscoveryLog.tsx    # Activity log + discovery journal
-```
+| Tool          | Purpose                        |
+|---------------|-------------------------------|
+| React + Vite  | UI framework and dev server    |
+| TypeScript    | Type safety throughout         |
+| Tailwind CSS  | Utility-first styling          |
+| Local state   | No external state libraries    |
 
-## 🚀 Getting Started
+## How to Run
 
 ```bash
 npm install
 npm run dev
 ```
 
+Open http://localhost:5173
+
+## Folder Structure
+
+```
+src/
+  constants/    # Season, weather, time period enums — no logic
+  types/        # TypeScript interfaces only
+  data/         # Static item/recipe/event data — no logic
+  hooks/        # React state hooks (one concern per hook)
+  components/   # UI panels and reusable widgets
+  utils/        # Pure utility functions (no React)
+docs/
+  game-rules.md # Full game rules and extension guide
+  roadmap.md    # Future feature ideas
+```
+
 ## 🌟 Features
 
-- **20 unique collectable items** across flora, minerals, creatures, and special categories
+- **20+ unique collectable items** spanning flora, minerals, creatures, and special categories
 - **8 crafting recipes** including legendary items
-- **6 world events** that trigger based on conditions
-- **Dynamic spawn system** — items only appear under matching conditions
-- **Discovery journal** — track when and where you found each item
-- **Pixel-art inspired UI** using Tailwind CSS
-- **Simulated game clock** — time advances every 5 seconds
+- **Dynamic spawn system** — items only appear under matching season/weather/time conditions
+- **Discovery journal** — track every item you have ever found
+- **Event log** — see what happened on each turn
 
-## 🗺️ Item Rarities
+## How to Extend
 
-| Rarity | Spawn Chance |
-|--------|-------------|
-| Common | 70% |
-| Uncommon | 45% |
-| Rare | 20% |
-| Legendary | 5% |
+See [`docs/game-rules.md`](docs/game-rules.md) for:
+- Adding new items
+- Adding new recipes
+- Adding new world conditions
 
-## TODO
-
-See [roadmap.md](./roadmap.md) for planned features.
+See [`docs/roadmap.md`](docs/roadmap.md) for planned future features.

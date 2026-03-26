@@ -1,102 +1,91 @@
-import type { Recipe } from '../types/game';
+// Static recipe definitions. No logic — pure data only.
+// To add a new recipe: copy an entry and adjust id, name, ingredients, result.
+
+import type { Recipe } from '../types/recipes';
 
 export const RECIPES: Recipe[] = [
   {
-    id: 'dawn_tea',
-    name: 'Dawn Tea',
-    emoji: '🍵',
-    description: 'A calming tea brewed from morning dew flowers. Reveals hidden spawns.',
-    inputs: [
-      { itemId: 'morning_dew_flower', quantity: 2 },
-      { itemId: 'river_stone', quantity: 1 },
+    id: 'flower_crown',
+    name: 'Flower Crown',
+    description: 'A beautiful crown woven from sunflowers and spring blossoms.',
+    ingredients: [
+      { itemId: 'sunflower', quantity: 2 },
+      { itemId: 'morning_dew_flower', quantity: 1 },
     ],
-    output: { itemId: 'dawn_tea', quantity: 1 },
+    result: { itemId: 'four_leaf_clover', quantity: 1 },
   },
   {
-    id: 'sunlight_elixir',
-    name: 'Sunlight Elixir',
-    emoji: '☀️',
-    description: 'A glowing potion made from summer ingredients.',
-    inputs: [
-      { itemId: 'sunpetal', quantity: 3 },
-      { itemId: 'sunstone', quantity: 1 },
-      { itemId: 'sunberry', quantity: 2 },
+    id: 'mushroom_soup',
+    name: 'Mushroom Soup',
+    description: 'A warm autumnal soup brewed from autumn finds.',
+    ingredients: [
+      { itemId: 'mushroom', quantity: 2 },
+      { itemId: 'raindrop', quantity: 1 },
     ],
-    output: { itemId: 'sunlight_elixir', quantity: 1 },
-  },
-  {
-    id: 'storm_lantern',
-    name: 'Storm Lantern',
-    emoji: '🏮',
-    description: 'A lantern charged with storm energy. Lights up the night.',
-    inputs: [
-      { itemId: 'storm_shard', quantity: 1 },
-      { itemId: 'storm_mushroom', quantity: 2 },
-      { itemId: 'river_stone', quantity: 2 },
-    ],
-    output: { itemId: 'storm_lantern', quantity: 1 },
-  },
-  {
-    id: 'moonstone_pendant',
-    name: 'Moonstone Pendant',
-    emoji: '📿',
-    description: 'A beautiful pendant that glows at night.',
-    inputs: [
-      { itemId: 'moonstone', quantity: 1 },
-      { itemId: 'moongrass', quantity: 3 },
-      { itemId: 'night_moth', quantity: 1 },
-    ],
-    output: { itemId: 'moonstone_pendant', quantity: 1 },
+    result: { itemId: 'fog_pearl', quantity: 1 },
   },
   {
     id: 'winter_charm',
     name: 'Winter Charm',
-    emoji: '🔮',
-    description: "A magical charm woven from winter's rarest finds.",
-    inputs: [
+    description: 'A magical charm woven from winter\'s rarest finds.',
+    ingredients: [
       { itemId: 'frostbloom', quantity: 1 },
-      { itemId: 'winter_berry', quantity: 3 },
-      { itemId: 'frost_sprite', quantity: 1 },
+      { itemId: 'winter_berry', quantity: 2 },
+      { itemId: 'pinecone', quantity: 1 },
     ],
-    output: { itemId: 'winter_charm', quantity: 1 },
+    result: { itemId: 'frost_sprite', quantity: 1 },
   },
   {
-    id: 'lucky_bouquet',
-    name: 'Lucky Bouquet',
-    emoji: '💐',
-    description: 'A beautiful bouquet said to bring good fortune.',
-    inputs: [
-      { itemId: 'four_leaf_clover', quantity: 1 },
-      { itemId: 'spring_butterfly', quantity: 1 },
-      { itemId: 'rain_lily', quantity: 2 },
-      { itemId: 'morning_dew_flower', quantity: 1 },
+    id: 'moonstone_pendant',
+    name: 'Moonstone Pendant',
+    description: 'A beautiful pendant that glows at night.',
+    ingredients: [
+      { itemId: 'moonstone', quantity: 1 },
+      { itemId: 'moongrass', quantity: 2 },
+      { itemId: 'night_moth', quantity: 1 },
     ],
-    output: { itemId: 'lucky_bouquet', quantity: 1 },
-  },
-  {
-    id: 'celestial_crown',
-    name: 'Celestial Crown',
-    emoji: '👑',
-    description: 'A legendary crown made from celestial fragments.',
-    inputs: [
-      { itemId: 'star_fragment', quantity: 2 },
-      { itemId: 'moonstone', quantity: 2 },
-      { itemId: 'sunstone', quantity: 1 },
-      { itemId: 'frost_sprite', quantity: 1 },
-    ],
-    output: { itemId: 'celestial_crown', quantity: 1 },
+    result: { itemId: 'star_fragment', quantity: 1 },
   },
   {
     id: 'firefly_jar',
     name: 'Firefly Jar',
-    emoji: '🫙',
     description: 'A jar filled with glowing fireflies for light.',
-    inputs: [
+    ingredients: [
       { itemId: 'firefly', quantity: 3 },
       { itemId: 'river_stone', quantity: 1 },
     ],
-    output: { itemId: 'firefly_jar', quantity: 1 },
+    result: { itemId: 'sunstone', quantity: 1 },
+  },
+  {
+    id: 'autumn_wreath',
+    name: 'Autumn Wreath',
+    description: 'A decorative wreath from fallen leaves.',
+    ingredients: [
+      { itemId: 'autumn_leaf', quantity: 3 },
+      { itemId: 'pinecone', quantity: 1 },
+    ],
+    result: { itemId: 'moonstone', quantity: 1 },
+  },
+  {
+    id: 'lucky_bouquet',
+    name: 'Lucky Bouquet',
+    description: 'A beautiful bouquet said to bring good fortune.',
+    ingredients: [
+      { itemId: 'four_leaf_clover', quantity: 1 },
+      { itemId: 'spring_butterfly', quantity: 1 },
+      { itemId: 'rain_lily', quantity: 2 },
+    ],
+    result: { itemId: 'ancient_seed', quantity: 1 },
+  },
+  {
+    id: 'celestial_crown',
+    name: 'Celestial Crown',
+    description: 'A legendary crown made from celestial fragments.',
+    ingredients: [
+      { itemId: 'star_fragment', quantity: 2 },
+      { itemId: 'moonstone', quantity: 2 },
+      { itemId: 'sunstone', quantity: 1 },
+    ],
+    result: { itemId: 'frost_sprite', quantity: 1 },
   },
 ];
-
-export const CRAFTED_ITEM_IDS = RECIPES.map(r => r.output.itemId);
