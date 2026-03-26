@@ -25,7 +25,7 @@ export function DiscoveryLog({ discoveries, log }: Props) {
         <div className="text-teal-400 text-xs font-pixel mb-2">Activity</div>
         <div className="bg-black/30 rounded p-2 h-28 overflow-y-auto space-y-1">
           {log.map((entry, i) => (
-            <div key={i} className="text-xs font-pixel text-gray-300" style={{fontSize: '9px'}}>
+            <div key={i} className="text-xxxs font-pixel text-gray-300">
               {entry}
             </div>
           ))}
@@ -50,11 +50,11 @@ export function DiscoveryLog({ discoveries, log }: Props) {
               >
                 <div className="flex items-center gap-1 mb-1">
                   <span className="text-sm">{item.emoji}</span>
-                  <span className={`text-xs font-pixel ${RARITY_COLOR[item.rarity]}`} style={{fontSize: '8px'}}>
+                  <span className={`text-xxs font-pixel ${RARITY_COLOR[item.rarity]}`}>
                     {item.name}
                   </span>
                 </div>
-                <div className="text-gray-500 font-pixel" style={{fontSize: '8px'}}>
+                <div className="text-gray-500 font-pixel text-xxs">
                   Day {entry.discoveredAt.dayCount} • {entry.discoveredAt.season}
                 </div>
               </div>

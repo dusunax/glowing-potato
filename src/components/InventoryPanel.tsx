@@ -44,7 +44,7 @@ export function InventoryPanel({ inventory }: Props) {
         title={`${item.name}\n${item.description}\nRarity: ${item.rarity}`}
       >
         <span className="text-lg">{item.emoji}</span>
-        <span className="text-gray-200 text-xs font-pixel text-center leading-tight" style={{fontSize: '8px'}}>
+        <span className="text-gray-200 text-xxs font-pixel text-center leading-tight">
           {item.name}
         </span>
         <span className="text-yellow-300 text-xs font-pixel">×{invItem.quantity}</span>

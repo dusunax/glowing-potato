@@ -9,6 +9,10 @@ export default {
       fontFamily: {
         pixel: ['"Press Start 2P"', 'monospace'],
       },
+      fontSize: {
+        'xxs': '8px',
+        'xxxs': '9px',
+      },
     },
   },
   plugins: [],

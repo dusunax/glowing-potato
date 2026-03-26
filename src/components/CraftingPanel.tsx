@@ -56,17 +56,16 @@ export function CraftingPanel({ inventory, canCraft, onCraft }: Props) {
                   return (
                     <span
                       key={input.itemId}
-                      className={`text-xs font-pixel rounded px-1 py-0.5 ${
+                      className={`text-xxxs font-pixel rounded px-1 py-0.5 ${
                         enough ? 'text-green-300 bg-green-900/40' : 'text-red-300 bg-red-900/40'
                       }`}
-                      style={{fontSize: '9px'}}
                     >
                       {item?.emoji || '?'} ×{input.quantity} ({have})
                     </span>
                   );
                 })}
               </div>
-              <div className="text-gray-500 mt-1" style={{fontSize: '9px', fontFamily: 'monospace'}}>
+              <div className="text-gray-500 mt-1 text-xxxs font-mono">
                 → {recipe.emoji} {recipe.name}
               </div>
             </div>

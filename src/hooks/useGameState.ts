@@ -126,7 +126,7 @@ export function useGameState() {
     return spawnableItems(conditions).length;
   }, [spawnableItems]);
 
-  const allItemsDiscovered = useMemo(() => discoveries.length, [discoveries]);
+  const discoveredItemsCount = useMemo(() => discoveries.length, [discoveries]);
 
   return {
     inventory,
@@ -136,6 +136,6 @@ export function useGameState() {
     canCraft,
     craft,
     spawnCount,
-    allItemsDiscovered,
+    discoveredItemsCount,
   };
 }
