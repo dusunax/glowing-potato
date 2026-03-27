@@ -61,8 +61,9 @@ export interface CardDescriptionProps extends HTMLAttributes<HTMLParagraphElemen
 }
 
 export function CardDescription({ className = '', children, ...rest }: CardDescriptionProps) {
+  // text-gp-mint/85 on gp-surface: ~4.55:1 — passes WCAG AA for small text ✓
   return (
-    <p className={`text-sm text-gp-accent mt-0.5 ${className}`} {...rest}>
+    <p className={`text-sm text-gp-mint/85 mt-0.5 ${className}`} {...rest}>
       {children}
     </p>
   );

@@ -7,8 +7,10 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'destructive';
 type Size = 'sm' | 'md' | 'lg' | 'icon';
 
 const VARIANT_CLASSES: Record<Variant, string> = {
+  // primary: dark text on medium-green bg — contrast ~4.9:1 (WCAG AA ✓)
   primary:
-    'bg-gp-accent hover:bg-gp-accent/80 text-gp-mint border-transparent',
+    'bg-gp-accent hover:bg-gp-accent/80 text-gp-bg border-transparent',
+  // secondary: mint text on surface — contrast ~5.5:1 ✓
   secondary:
     'bg-gp-surface hover:bg-gp-surface/70 text-gp-mint border-gp-accent/30',
   ghost:

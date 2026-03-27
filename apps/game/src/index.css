@@ -2,16 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Glowing Potato design tokens — https://colorhunt.co/palette/091413285a48408a71b0e4cc */
+/*
+ * Glowing Potato design tokens
+ * https://colorhunt.co/palette/091413285a48408a71b0e4cc
+ *
+ * Defined as space-separated RGB channels so Tailwind's opacity modifiers
+ * (e.g. bg-gp-surface/50, text-gp-mint/70) generate valid CSS.
+ */
 :root {
-  --gp-bg: #091413;
-  --gp-surface: #285a48;
-  --gp-accent: #408a71;
-  --gp-mint: #b0e4cc;
+  --gp-bg:      9 20 19;      /* #091413 */
+  --gp-surface: 40 90 72;     /* #285a48 */
+  --gp-accent:  64 138 113;   /* #408a71 */
+  --gp-mint:    176 228 204;  /* #b0e4cc */
 }
 
 body {
-  background-color: var(--gp-bg);
-  color: var(--gp-mint);
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  background-color: rgb(var(--gp-bg));
+  color: rgb(var(--gp-mint));
+  font-family: 'Nunito', system-ui, sans-serif;
 }

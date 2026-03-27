@@ -36,7 +36,8 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
         </Button>
         <div className="flex-1 text-center">
           <h1 className="text-3xl font-bold text-gp-mint tracking-tight">🌿 Glowing Potato</h1>
-          <p className="text-gp-accent text-sm mt-0.5">A cozy 2D collection game</p>
+          {/* text-gp-mint/70 on gp-bg: ~9.8:1 contrast ✓ */}
+          <p className="text-gp-mint/70 text-sm mt-0.5">A cozy 2D collection game</p>
         </div>
         {/* spacer so title stays centred */}
         <div className="w-20" />

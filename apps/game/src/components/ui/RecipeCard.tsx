@@ -19,7 +19,8 @@ export function RecipeCard({ recipe, canCraft, onCraft, getQuantity }: RecipeCar
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
           <div className="font-semibold text-gp-mint">{recipe.name}</div>
-          <div className="text-xs text-gp-accent">{recipe.description}</div>
+          {/* text-gp-mint/85 on near-dark bg: high contrast ✓ */}
+          <div className="text-xs text-gp-mint/85">{recipe.description}</div>
         </div>
         {resultItem && (
           <span className="text-2xl" title={resultItem.name}>{resultItem.emoji}</span>

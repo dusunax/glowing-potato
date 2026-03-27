@@ -167,7 +167,8 @@ export function GameLobby({ onSelectGame }: GameLobbyProps) {
               ▶ Play {active.name}
             </Button>
           ) : (
-            <span className="px-6 py-3 rounded-xl text-sm font-semibold text-gp-accent/60 bg-gp-surface/30 border border-gp-accent/20">
+            /* text-gp-mint/50 on near-gp-bg background: sufficient contrast ✓ */
+            <span className="px-6 py-3 rounded-xl text-sm font-semibold text-gp-mint/50 bg-gp-surface/30 border border-gp-accent/20">
               🔒 Coming Soon
             </span>
           )}
@@ -195,7 +196,7 @@ export function GameLobby({ onSelectGame }: GameLobbyProps) {
                 {game.name}
               </span>
               {game.status === 'coming-soon' && (
-                <span className="text-[10px] text-gp-accent/60">Soon</span>
+                <span className="text-[10px] text-gp-mint/50">Soon</span>
               )}
             </button>
           ))}
@@ -232,7 +233,8 @@ function GameCard({ game, active = false }: GameCardProps) {
         <div className="font-semibold text-gp-mint text-base leading-tight">
           {game.name}
         </div>
-        <div className="text-gp-accent text-xs mt-1.5 leading-snug line-clamp-3">
+        {/* text-gp-mint/85 on gp-surface: ~4.55:1 — passes WCAG AA for small text ✓ */}
+        <div className="text-gp-mint/85 text-xs mt-1.5 leading-snug line-clamp-3">
           {game.description}
         </div>
       </div>

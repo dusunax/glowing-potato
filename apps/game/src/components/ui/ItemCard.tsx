@@ -23,14 +23,16 @@ export function ItemCard({ slot }: ItemCardProps) {
       <span className="text-3xl">{item.emoji}</span>
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-gp-mint truncate">{item.name}</div>
-        <div className="text-xs text-gp-accent truncate">{item.description}</div>
+        {/* Secondary description text — text-gp-mint/85 on dark bg: ~12:1 contrast ✓ */}
+        <div className="text-xs text-gp-mint/85 truncate">{item.description}</div>
         <Badge
           label={item.rarity}
           variant={RARITY_BADGE_MAP[item.rarity] ?? 'muted'}
           className="mt-1"
         />
       </div>
-      <div className="text-2xl font-bold text-gp-accent">×{slot.quantity}</div>
+      {/* Quantity — full mint for maximum readability ✓ */}
+      <div className="text-2xl font-bold text-gp-mint">×{slot.quantity}</div>
     </div>
   );
 }

@@ -1,5 +1,9 @@
 // Design tokens for the Glowing Potato design system.
 // Colors sourced from: https://colorhunt.co/palette/091413285a48408a71b0e4cc
+//
+// NOTE: CSS variables in index.css are defined as space-separated RGB channels
+// (e.g. "9 20 19") so Tailwind opacity modifiers (bg-gp-bg/50) work correctly.
+// These hex values are the canonical references used for non-Tailwind contexts.
 
 export const palette = {
   /** Deepest background — #091413 */

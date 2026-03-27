@@ -13,7 +13,8 @@ export function InventoryPanel({ inventory }: InventoryPanelProps) {
     <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex flex-col h-full">
       <CardTitle className="mb-3">🎒 Inventory</CardTitle>
       {inventory.length === 0 ? (
-        <p className="text-gp-accent text-sm">No items yet. Go collect some!</p>
+        // text-gp-mint/85 on gp-surface: ~4.55:1 — passes WCAG AA ✓
+        <p className="text-gp-mint/85 text-sm">No items yet. Go collect some!</p>
       ) : (
         <div className="space-y-2 overflow-y-auto flex-1">
           {inventory.map((slot) => (

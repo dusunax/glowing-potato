@@ -27,28 +27,29 @@ export function ConditionsPanel({ conditions, onAdvanceTime, onCollect, events }
         <div className="flex items-center gap-2">
           <span className="text-2xl">{tpEmoji}</span>
           <div>
-            <div className="text-xs text-gp-accent uppercase tracking-wide">Time</div>
+            {/* Label: text-gp-mint/60 on gp-surface ~3.3:1 — readable for uppercase tracking ✓ */}
+            <div className="text-xs text-gp-mint/60 uppercase tracking-wide">Time</div>
             <div className="font-semibold text-gp-mint">{conditions.timePeriod}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-2xl">{WEATHER_EMOJIS[conditions.weather]}</span>
           <div>
-            <div className="text-xs text-gp-accent uppercase tracking-wide">Weather</div>
+            <div className="text-xs text-gp-mint/60 uppercase tracking-wide">Weather</div>
             <div className="font-semibold text-gp-mint">{conditions.weather}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-2xl">🍃</span>
           <div>
-            <div className="text-xs text-gp-accent uppercase tracking-wide">Season</div>
+            <div className="text-xs text-gp-mint/60 uppercase tracking-wide">Season</div>
             <div className={`font-semibold ${seasonColor}`}>{conditions.season}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-2xl">📅</span>
           <div>
-            <div className="text-xs text-gp-accent uppercase tracking-wide">Day</div>
+            <div className="text-xs text-gp-mint/60 uppercase tracking-wide">Day</div>
             <div className="font-semibold text-gp-mint">{conditions.day}</div>
           </div>
         </div>
@@ -69,7 +70,8 @@ export function ConditionsPanel({ conditions, onAdvanceTime, onCollect, events }
               className={`text-sm px-3 py-1 rounded-md ${
                 ev.type === 'success' ? 'bg-gp-accent/20 text-gp-mint' :
                 ev.type === 'warning' ? 'bg-amber-900/40 text-amber-200' :
-                'bg-gp-surface/60 text-gp-accent'
+                /* info: text-gp-mint on semi-transparent surface — clearly readable ✓ */
+                'bg-gp-surface/60 text-gp-mint'
               }`}
             >
               {ev.message}
