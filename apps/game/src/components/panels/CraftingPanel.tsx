@@ -2,6 +2,7 @@
 
 import type { Recipe } from '../../types/recipes';
 import { RecipeCard } from '../ui/RecipeCard';
+import { CardTitle } from '@glowing-potato/ui';
 
 interface CraftingPanelProps {
   recipes: Recipe[];
@@ -12,8 +13,8 @@ interface CraftingPanelProps {
 
 export function CraftingPanel({ recipes, canCraft, onCraft, getQuantity }: CraftingPanelProps) {
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 flex flex-col h-full">
-      <h2 className="text-lg font-bold mb-3 text-slate-100">⚗️ Crafting</h2>
+    <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex flex-col h-full">
+      <CardTitle className="mb-3">⚗️ Crafting</CardTitle>
       <div className="space-y-3 overflow-y-auto flex-1">
         {recipes.map((recipe) => (
           <RecipeCard

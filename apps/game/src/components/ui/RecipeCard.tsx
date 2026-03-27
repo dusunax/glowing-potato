@@ -2,6 +2,7 @@
 
 import { ITEMS } from '../../data/items';
 import type { Recipe } from '../../types/recipes';
+import { Button } from '@glowing-potato/ui';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -14,11 +15,12 @@ export function RecipeCard({ recipe, canCraft, onCraft, getQuantity }: RecipeCar
   const resultItem = ITEMS.find((i) => i.id === recipe.result.itemId);
 
   return (
-    <div className={`bg-slate-800 border rounded-lg p-4 transition-colors ${canCraft ? 'border-emerald-600' : 'border-slate-700'}`}>
+    <div className={`bg-gp-bg/30 border rounded-lg p-4 transition-colors ${canCraft ? 'border-gp-mint/40' : 'border-gp-accent/20'}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
-          <div className="font-semibold text-slate-100">{recipe.name}</div>
-          <div className="text-xs text-slate-400">{recipe.description}</div>
+          <div className="font-semibold text-gp-mint">{recipe.name}</div>
+          {/* text-gp-mint/85 on near-dark bg: high contrast ✓ */}
+          <div className="text-xs text-gp-mint/85">{recipe.description}</div>
         </div>
         {resultItem && (
           <span className="text-2xl" title={resultItem.name}>{resultItem.emoji}</span>
@@ -32,24 +34,26 @@ export function RecipeCard({ recipe, canCraft, onCraft, getQuantity }: RecipeCar
           return (
             <span
               key={ing.itemId}
-              className={`text-xs px-2 py-1 rounded-full border ${enough ? 'border-emerald-600 text-emerald-300' : 'border-red-700 text-red-400'}`}
+              className={`text-xs px-2 py-1 rounded-full border ${
+                enough
+                  ? 'border-gp-mint/40 text-gp-mint'
+                  : 'border-red-600/40 text-red-300'
+              }`}
             >
               {item?.emoji} {item?.name} {have}/{ing.quantity}
             </span>
           );
         })}
       </div>
-      <button
+      <Button
+        variant={canCraft ? 'primary' : 'ghost'}
+        size="sm"
         onClick={onCraft}
         disabled={!canCraft}
-        className={`w-full py-1.5 rounded text-sm font-semibold transition-colors ${
-          canCraft
-            ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
-            : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-        }`}
+        className="w-full justify-center"
       >
         {canCraft ? '✨ Craft' : 'Missing ingredients'}
-      </button>
+      </Button>
     </div>
   );
 }
