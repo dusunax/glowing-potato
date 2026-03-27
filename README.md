@@ -41,14 +41,14 @@ Shared UI components live in `packages/ui` (`@glowing-potato/ui`): `Button`, `Ca
 ## How to Run
 
 ```bash
-npm install       # installs all workspace packages
-npm run dev       # starts the game dev server at http://localhost:5173
+pnpm install      # installs all workspace packages
+pnpm dev          # starts the game dev server at http://localhost:5173
 ```
 
 Or run inside the game workspace directly:
 
 ```bash
-cd apps/game && npm run dev
+cd apps/game && pnpm dev
 ```
 
 ## Monorepo Structure
