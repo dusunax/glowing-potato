@@ -2,6 +2,7 @@
 
 import type { Inventory } from '../../types/inventory';
 import { ItemCard } from '../ui/ItemCard';
+import { CardTitle } from '@glowing-potato/ui';
 
 interface InventoryPanelProps {
   inventory: Inventory;
@@ -9,10 +10,10 @@ interface InventoryPanelProps {
 
 export function InventoryPanel({ inventory }: InventoryPanelProps) {
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 flex flex-col h-full">
-      <h2 className="text-lg font-bold mb-3 text-slate-100">🎒 Inventory</h2>
+    <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex flex-col h-full">
+      <CardTitle className="mb-3">🎒 Inventory</CardTitle>
       {inventory.length === 0 ? (
-        <p className="text-slate-500 text-sm">No items yet. Go collect some!</p>
+        <p className="text-gp-accent text-sm">No items yet. Go collect some!</p>
       ) : (
         <div className="space-y-2 overflow-y-auto flex-1">
           {inventory.map((slot) => (

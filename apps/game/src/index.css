@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Glowing Potato design tokens — https://colorhunt.co/palette/091413285a48408a71b0e4cc */
+:root {
+  --gp-bg: #091413;
+  --gp-surface: #285a48;
+  --gp-accent: #408a71;
+  --gp-mint: #b0e4cc;
+}
+
+body {
+  background-color: var(--gp-bg);
+  color: var(--gp-mint);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}

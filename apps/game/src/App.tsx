@@ -10,6 +10,7 @@ import { InventoryPanel } from './components/panels/InventoryPanel';
 import { CraftingPanel } from './components/panels/CraftingPanel';
 import { DiscoveryPanel } from './components/panels/DiscoveryPanel';
 import { SpawnPanel } from './components/panels/SpawnPanel';
+import { Button } from '@glowing-potato/ui';
 
 // --- Collection game screen ---
 
@@ -28,17 +29,14 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
   } = useGameState();
 
   return (
-    <div className="min-h-screen p-4 md:p-6" style={{ background: '#1a1a2e' }}>
+    <div className="min-h-screen p-4 md:p-6 bg-gp-bg">
       <header className="mb-4 flex items-center gap-4">
-        <button
-          onClick={onBack}
-          className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium transition-colors flex items-center gap-1"
-        >
+        <Button variant="ghost" size="sm" onClick={onBack}>
           ← Lobby
-        </button>
+        </Button>
         <div className="flex-1 text-center">
-          <h1 className="text-3xl font-bold text-slate-100 tracking-tight">🌿 Glowing Potato</h1>
-          <p className="text-slate-400 text-sm mt-0.5">A cozy 2D collection game</p>
+          <h1 className="text-3xl font-bold text-gp-mint tracking-tight">🌿 Glowing Potato</h1>
+          <p className="text-gp-accent text-sm mt-0.5">A cozy 2D collection game</p>
         </div>
         {/* spacer so title stays centred */}
         <div className="w-20" />
