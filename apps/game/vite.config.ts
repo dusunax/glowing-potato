@@ -1,19 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import path from 'path'
 
-const appRoot = resolve(dirname(fileURLToPath(import.meta.url)))
-const uiPackageRoot = resolve(appRoot, '../../packages/ui')
-const uiEntry = resolve(uiPackageRoot, 'src/index.ts')
+const appRoot = process.cwd()
+const uiPackageRoot = path.resolve(appRoot, '../../packages/ui')
+const uiEntry = path.resolve(uiPackageRoot, 'src/index.ts')
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: {
-      '@glowing-potato/ui': uiEntry,
-    },
+    alias: [
+      { find: '@glowing-potato/ui', replacement: uiEntry },
+    ],
   },
   server: {
     fs: {

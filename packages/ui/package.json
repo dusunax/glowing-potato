@@ -10,10 +10,14 @@
   "scripts": {
     "build": "tsc -b"
   },
+  "dependencies": {
+    "@glowing-potato/theme": "workspace:*"
+  },
   "peerDependencies": {
     "react": "^19.0.0"
   },
   "devDependencies": {
+    "@glowing-potato/tsconfig": "workspace:*",
     "@types/react": "^19.2.14",
     "typescript": "~5.9.3"
   }

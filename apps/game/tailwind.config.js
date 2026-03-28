@@ -1,3 +1,5 @@
+import { gpColors, gpFontFamily } from '@glowing-potato/theme/tailwind';
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -8,19 +10,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Glowing Potato design system palette
+        // Glowing Potato design system palette (sourced from @glowing-potato/theme)
         // https://colorhunt.co/palette/091413285a48408a71b0e4cc
-        // Using rgb(var(...) / <alpha-value>) so opacity modifiers like /50 work correctly.
-        gp: {
-          bg:      'rgb(var(--gp-bg)      / <alpha-value>)',
-          surface: 'rgb(var(--gp-surface) / <alpha-value>)',
-          accent:  'rgb(var(--gp-accent)  / <alpha-value>)',
-          mint:    'rgb(var(--gp-mint)    / <alpha-value>)',
-        },
+        gp: gpColors,
       },
-      fontFamily: {
-        sans: ['Nunito', 'system-ui', 'sans-serif'],
-      },
+      fontFamily: gpFontFamily,
     },
   },
   plugins: [],

@@ -32,8 +32,11 @@ importers:
 
   apps/game:
     dependencies:
+      '@glowing-potato/theme':
+        specifier: workspace:*
+        version: link:../../packages/theme
       '@glowing-potato/ui':
-        specifier: '*'
+        specifier: workspace:*
         version: link:../../packages/ui
       react:
         specifier: ^19.2.4
@@ -42,6 +45,9 @@ importers:
         specifier: ^19.2.4
         version: 19.2.4(react@19.2.4)
     devDependencies:
+      '@glowing-potato/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
       '@types/node':
         specifier: ^24.12.0
         version: 24.12.0
@@ -67,12 +73,26 @@ importers:
         specifier: ^8.0.1
         version: 8.0.3(@types/node@24.12.0)
 
+  packages/theme:
+    devDependencies:
+      '@glowing-potato/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+
+  packages/tsconfig: {}
+
   packages/ui:
     dependencies:
+      '@glowing-potato/theme':
+        specifier: workspace:*
+        version: link:../theme
       react:
         specifier: ^19.0.0
         version: 19.2.4
     devDependencies:
+      '@glowing-potato/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14

@@ -1,0 +1,4 @@
+{
+  "extends": "@glowing-potato/tsconfig/base.json",
+  "include": ["src"]
+}
