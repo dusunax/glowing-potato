@@ -221,6 +221,8 @@ export interface UseDontSayItReturn {
   game: DsiGameState | null;
   sendMessage: (text: string) => void;
   castVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
+  toggleReady: () => void;
+  startGame: () => void;
   sttSupported: boolean;
   sttActive: boolean;
   sttError: string | null;
@@ -329,14 +331,9 @@ export function useDontSayIt(): UseDontSayItReturn {
         const botSlots = buildWordSlots([...allAssigned]);
         botSlots.forEach((s) => allAssigned.push(...s.candidates));
 
-        const bot: DsiPlayer = { id: uid(), name, wordSlots: botSlots, isOut: false, isBot: true };
-        const newPlayers = [...prev.players, bot];
-
-        if (newPlayers.length >= MIN_PLAYERS) {
-          startVotingTimer();
-          return { ...prev, players: newPlayers, phase: 'voting', votingTimeLeft: VOTING_SECONDS };
-        }
-        return { ...prev, players: newPlayers };
+        // Bots are always ready immediately on joining.
+        const bot: DsiPlayer = { id: uid(), name, wordSlots: botSlots, isOut: false, isBot: true, isReady: true };
+        return { ...prev, players: [...prev.players, bot] };
       });
     }
 
@@ -347,7 +344,7 @@ export function useDontSayIt(): UseDontSayItReturn {
   // Room enter helper
   // ---------------------------------------------------------------------------
   const enterRoom = useCallback(
-    (roomId: string, title: string, visibility: RoomVisibility) => {
+    (roomId: string, title: string, visibility: RoomVisibility, isHost: boolean) => {
       const localId = uid();
       const allAssigned: string[] = [];
       const localPlayer: DsiPlayer = {
@@ -356,12 +353,14 @@ export function useDontSayIt(): UseDontSayItReturn {
         wordSlots: buildWordSlots(allAssigned),
         isOut: false,
         isBot: false,
+        isReady: false,
       };
       setGame({
         phase: 'waiting',
         roomId,
         roomTitle: title,
         roomVisibility: visibility,
+        isHost,
         localPlayerId: localId,
         players: [localPlayer],
         messages: [],
@@ -383,7 +382,7 @@ export function useDontSayIt(): UseDontSayItReturn {
         ...prev,
         { id: roomId, title: trimmedTitle, visibility, playerCount: 1, maxPlayers: MAX_PLAYERS },
       ]);
-      enterRoom(roomId, trimmedTitle, visibility);
+      enterRoom(roomId, trimmedTitle, visibility, true);
     },
     [enterRoom]
   );
@@ -391,7 +390,7 @@ export function useDontSayIt(): UseDontSayItReturn {
   const joinRoom = useCallback(
     (roomId: string) => {
       const room = rooms.find((r) => r.id === roomId);
-      enterRoom(roomId, room?.title ?? `Room ${roomId}`, room?.visibility ?? 'public');
+      enterRoom(roomId, room?.title ?? `Room ${roomId}`, room?.visibility ?? 'public', false);
     },
     [enterRoom, rooms]
   );
@@ -453,6 +452,36 @@ export function useDontSayIt(): UseDontSayItReturn {
       return applyMessage(prev, prev.localPlayerId, trimmed);
     });
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Ready / Start (waiting phase)
+  // ---------------------------------------------------------------------------
+
+  /** Toggle the local player's ready status. */
+  const toggleReady = useCallback(() => {
+    setGame((prev) => {
+      if (!prev || prev.phase !== 'waiting') return prev;
+      const newPlayers = prev.players.map((p) =>
+        p.id === prev.localPlayerId ? { ...p, isReady: !p.isReady } : p
+      );
+      return { ...prev, players: newPlayers };
+    });
+  }, []);
+
+  /**
+   * Host-only: start the game.
+   * Allowed only when ≥2 players are present and every player is ready.
+   */
+  const startGame = useCallback(() => {
+    setGame((prev) => {
+      if (!prev || prev.phase !== 'waiting') return prev;
+      if (!prev.isHost) return prev;
+      if (prev.players.length < MIN_PLAYERS) return prev;
+      if (!prev.players.every((p) => p.isReady)) return prev;
+      startVotingTimer();
+      return { ...prev, phase: 'voting', votingTimeLeft: VOTING_SECONDS };
+    });
+  }, [startVotingTimer]);
 
   // ---------------------------------------------------------------------------
   // STT
@@ -519,5 +548,5 @@ export function useDontSayIt(): UseDontSayItReturn {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game?.phase]);
 
-  return { rooms, createRoom, joinRoom, joinPrivateRoom, leaveRoom, game, sendMessage, castVote, sttSupported, sttActive, sttError, toggleStt, sttInterim };
+  return { rooms, createRoom, joinRoom, joinPrivateRoom, leaveRoom, game, sendMessage, castVote, toggleReady, startGame, sttSupported, sttActive, sttError, toggleStt, sttInterim };
 }

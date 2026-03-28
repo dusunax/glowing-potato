@@ -19,6 +19,8 @@ export function DontSayIt({ onBack }: DontSayItProps) {
     game,
     sendMessage,
     castVote,
+    toggleReady,
+    startGame,
     sttSupported,
     sttActive,
     sttError,
@@ -33,6 +35,8 @@ export function DontSayIt({ onBack }: DontSayItProps) {
         onLeave={leaveRoom}
         onSendMessage={sendMessage}
         onCastVote={castVote}
+        onToggleReady={toggleReady}
+        onStartGame={startGame}
         sttSupported={sttSupported}
         sttActive={sttActive}
         sttError={sttError}

@@ -11,6 +11,8 @@ interface GameRoomProps {
   onLeave: () => void;
   onSendMessage: (text: string) => void;
   onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
+  onToggleReady: () => void;
+  onStartGame: () => void;
   sttSupported: boolean;
   sttActive: boolean;
   sttError: string | null;
@@ -23,6 +25,8 @@ export function GameRoom({
   onLeave,
   onSendMessage,
   onCastVote,
+  onToggleReady,
+  onStartGame,
   sttSupported,
   sttActive,
   sttError,
@@ -44,7 +48,13 @@ export function GameRoom({
       </header>
 
       {/* Phase views */}
-      {game.phase === 'waiting' && <WaitingView game={game} />}
+      {game.phase === 'waiting' && (
+        <WaitingView
+          game={game}
+          onToggleReady={onToggleReady}
+          onStartGame={onStartGame}
+        />
+      )}
       {game.phase === 'voting' && <VotingView game={game} onCastVote={onCastVote} />}
       {game.phase === 'playing' && (
         <PlayingView
@@ -81,23 +91,43 @@ function PhaseTag({ phase }: { phase: DsiGameState['phase'] }) {
 // Waiting view
 // ---------------------------------------------------------------------------
 
-function WaitingView({ game }: { game: DsiGameState }) {
+interface WaitingViewProps {
+  game: DsiGameState;
+  onToggleReady: () => void;
+  onStartGame: () => void;
+}
+
+function WaitingView({ game, onToggleReady, onStartGame }: WaitingViewProps) {
+  const localPlayer = game.players.find((p) => p.id === game.localPlayerId)!;
+  const allReady = game.players.length >= 2 && game.players.every((p) => p.isReady);
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
       <div className="text-5xl animate-pulse">⏳</div>
       <div className="text-center">
         <p className="text-gp-mint font-semibold text-lg">Waiting for players…</p>
         <p className="text-gp-mint/50 text-sm mt-1">
-          {game.players.length} / 4 — need at least 2 to start
+          {game.players.length} / 4 players
+          {game.isHost
+            ? ' — press Start when everyone is ready'
+            : ' — wait for the host to start'}
         </p>
       </div>
-      {/* Player list */}
+
+      {/* Player list with ready badges */}
       <div className="w-full max-w-xs space-y-2">
         {game.players.map((p) => (
           <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-gp-surface/50 border border-gp-accent/20">
             <span className="text-lg">{p.isBot ? '🤖' : '👤'}</span>
-            <span className="text-gp-mint text-sm font-medium">
+            <span className="text-gp-mint text-sm font-medium flex-1">
               {p.id === game.localPlayerId ? `${p.name} (you)` : p.name}
+            </span>
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+              p.isReady
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                : 'bg-gp-accent/10 text-gp-mint/40 border border-gp-accent/20'
+            }`}>
+              {p.isReady ? '✓ Ready' : 'Not ready'}
             </span>
           </div>
         ))}
@@ -108,6 +138,44 @@ function WaitingView({ game }: { game: DsiGameState }) {
             <span className="text-gp-mint/30 text-sm">Waiting for player…</span>
           </div>
         ))}
+      </div>
+
+      {/* Actions */}
+      <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+        {/* Ready toggle — always visible for the local human player */}
+        <Button
+          variant={localPlayer.isReady ? 'secondary' : 'primary'}
+          size="lg"
+          onClick={onToggleReady}
+          className="w-full"
+        >
+          {localPlayer.isReady ? '↩ Cancel Ready' : '✓ Ready'}
+        </Button>
+
+        {/* Start button — only visible to the host */}
+        {game.isHost && (
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={onStartGame}
+            disabled={!allReady}
+            className="w-full"
+            title={!allReady ? 'All players must be ready to start' : undefined}
+          >
+            ▶ Start Game
+          </Button>
+        )}
+
+        {!allReady && game.players.length >= 2 && (
+          <p className="text-gp-mint/40 text-xs text-center">
+            Waiting for all players to ready up…
+          </p>
+        )}
+        {game.players.length < 2 && (
+          <p className="text-gp-mint/40 text-xs text-center">
+            Need at least 2 players to start.
+          </p>
+        )}
       </div>
     </div>
   );

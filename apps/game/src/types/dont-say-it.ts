@@ -32,6 +32,12 @@ export interface DsiPlayer {
   wordSlots: DsiWordSlot[];
   isOut: boolean;
   isBot: boolean;
+  /**
+   * Whether the player has pressed Ready in the waiting phase.
+   * Bot players are automatically set to `true` on join; human players
+   * must explicitly toggle this with the Ready button.
+   */
+  isReady: boolean;
 }
 
 /** A single line in the in-game chat. */
@@ -52,6 +58,8 @@ export interface DsiGameState {
   roomTitle: string;
   roomVisibility: RoomVisibility;
   localPlayerId: string;
+  /** True when the local player is the one who created this room. */
+  isHost: boolean;
   players: DsiPlayer[];
   messages: DsiChatMessage[];
   /** Seconds remaining in the voting phase countdown. */
