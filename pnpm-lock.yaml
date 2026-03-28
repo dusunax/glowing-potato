@@ -80,6 +80,14 @@ importers:
 
   packages/tsconfig: {}
 
+  packages/theme:
+    devDependencies:
+      '@glowing-potato/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+
+  packages/tsconfig: {}
+
   packages/ui:
     dependencies:
       '@glowing-potato/theme':
