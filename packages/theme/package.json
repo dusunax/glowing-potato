@@ -8,5 +8,8 @@
     ".": "./src/index.ts",
     "./tailwind": "./tailwind.js",
     "./index.css": "./index.css"
+  },
+  "devDependencies": {
+    "@glowing-potato/tsconfig": "workspace:*"
   }
 }
