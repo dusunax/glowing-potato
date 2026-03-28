@@ -15,6 +15,48 @@ import type {
 import { pickWords } from '../data/words';
 
 // ---------------------------------------------------------------------------
+// Web Speech API minimal types (not universally available in lib.dom.d.ts)
+// ---------------------------------------------------------------------------
+
+interface SpeechRecognitionResultItem {
+  readonly transcript: string;
+}
+
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean;
+  readonly length: number;
+  [index: number]: SpeechRecognitionResultItem;
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionEvent {
+  readonly resultIndex: number;
+  readonly results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
+
+interface WindowWithSpeech extends Window {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -181,6 +223,7 @@ export interface UseDontSayItReturn {
   castVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
   sttSupported: boolean;
   sttActive: boolean;
+  sttError: string | null;
   toggleStt: () => void;
   sttInterim: string;
 }
@@ -190,13 +233,13 @@ export interface UseDontSayItReturn {
 // ---------------------------------------------------------------------------
 
 export function useDontSayIt(): UseDontSayItReturn {
-  const [rooms] = useState<DsiRoomSummary[]>(INITIAL_ROOMS);
+  const [rooms, setRooms] = useState<DsiRoomSummary[]>(INITIAL_ROOMS);
   const [game, setGame] = useState<DsiGameState | null>(null);
 
   const [sttActive, setSttActive] = useState(false);
   const [sttInterim, setSttInterim] = useState('');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
+  const [sttError, setSttError] = useState<string | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const sttSupported =
     typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
@@ -333,7 +376,14 @@ export function useDontSayIt(): UseDontSayItReturn {
 
   const createRoom = useCallback(
     (title: string, visibility: RoomVisibility) => {
-      enterRoom(randomId(), title.trim() || 'My Room', visibility);
+      const roomId = randomId();
+      const trimmedTitle = title.trim() || 'My Room';
+      // Add the new room to the list so it's visible in the lobby
+      setRooms((prev) => [
+        ...prev,
+        { id: roomId, title: trimmedTitle, visibility, playerCount: 1, maxPlayers: MAX_PLAYERS },
+      ]);
+      enterRoom(roomId, trimmedTitle, visibility);
     },
     [enterRoom]
   );
@@ -409,7 +459,8 @@ export function useDontSayIt(): UseDontSayItReturn {
   // ---------------------------------------------------------------------------
   const stopStt = useCallback(() => {
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+      // stop() may throw if the recognition has already ended; safe to ignore.
+      try { recognitionRef.current.stop(); } catch { /* already stopped */ }
       recognitionRef.current = null;
     }
     setSttActive(false);
@@ -418,18 +469,17 @@ export function useDontSayIt(): UseDontSayItReturn {
 
   const startStt = useCallback(() => {
     if (!sttSupported) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Ctor: any = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    const win = window as WindowWithSpeech;
+    const Ctor = win.SpeechRecognition ?? win.webkitSpeechRecognition;
     if (!Ctor) return;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const recognition: any = new Ctor();
+    setSttError(null);
+    const recognition: SpeechRecognitionInstance = new Ctor();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = '';
       let finalText = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -447,7 +497,10 @@ export function useDontSayIt(): UseDontSayItReturn {
       }
     };
 
-    recognition.onerror = () => { stopStt(); };
+    recognition.onerror = () => {
+      setSttError('Microphone access denied or speech recognition unavailable.');
+      stopStt();
+    };
     recognition.onend = () => {
       setSttActive((active) => { if (active) recognition.start(); return active; });
     };
@@ -466,5 +519,5 @@ export function useDontSayIt(): UseDontSayItReturn {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game?.phase]);
 
-  return { rooms, createRoom, joinRoom, joinPrivateRoom, leaveRoom, game, sendMessage, castVote, sttSupported, sttActive, toggleStt, sttInterim };
+  return { rooms, createRoom, joinRoom, joinPrivateRoom, leaveRoom, game, sendMessage, castVote, sttSupported, sttActive, sttError, toggleStt, sttInterim };
 }

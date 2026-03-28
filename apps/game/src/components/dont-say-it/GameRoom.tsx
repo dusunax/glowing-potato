@@ -13,6 +13,7 @@ interface GameRoomProps {
   onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
   sttSupported: boolean;
   sttActive: boolean;
+  sttError: string | null;
   onToggleStt: () => void;
   sttInterim: string;
 }
@@ -24,6 +25,7 @@ export function GameRoom({
   onCastVote,
   sttSupported,
   sttActive,
+  sttError,
   onToggleStt,
   sttInterim,
 }: GameRoomProps) {
@@ -50,6 +52,7 @@ export function GameRoom({
           onSendMessage={onSendMessage}
           sttSupported={sttSupported}
           sttActive={sttActive}
+          sttError={sttError}
           onToggleStt={onToggleStt}
           sttInterim={sttInterim}
         />
@@ -240,11 +243,12 @@ interface PlayingViewProps {
   onSendMessage: (text: string) => void;
   sttSupported: boolean;
   sttActive: boolean;
+  sttError: string | null;
   onToggleStt: () => void;
   sttInterim: string;
 }
 
-function PlayingView({ game, onSendMessage, sttSupported, sttActive, onToggleStt, sttInterim }: PlayingViewProps) {
+function PlayingView({ game, onSendMessage, sttSupported, sttActive, sttError, onToggleStt, sttInterim }: PlayingViewProps) {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localPlayer = game.players.find((p) => p.id === game.localPlayerId)!;
@@ -326,29 +330,34 @@ function PlayingView({ game, onSendMessage, sttSupported, sttActive, onToggleStt
                 ❌ You're out! Watch how the others do.
               </div>
             ) : (
-              <div className="flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Type carefully…"
-                  className="flex-1 bg-gp-surface/40 border border-gp-accent/30 rounded-lg px-3 py-2 text-sm text-gp-mint placeholder:text-gp-mint/30 focus:outline-none focus:ring-2 focus:ring-gp-mint/40"
-                />
-                {sttSupported && (
-                  <Button
-                    variant={sttActive ? 'destructive' : 'secondary'}
-                    size="icon"
-                    onClick={onToggleStt}
-                    title={sttActive ? 'Stop speech recognition' : 'Start speech recognition'}
-                    className="flex-shrink-0"
-                  >
-                    {sttActive ? '🎙️' : '🎤'}
-                  </Button>
+              <div className="space-y-1.5">
+                {sttError && (
+                  <p className="text-red-400 text-xs px-1">{sttError}</p>
                 )}
-                <Button variant="primary" size="sm" onClick={handleSend} disabled={!inputText.trim()}>
-                  Send
-                </Button>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                    placeholder="Type carefully…"
+                    className="flex-1 bg-gp-surface/40 border border-gp-accent/30 rounded-lg px-3 py-2 text-sm text-gp-mint placeholder:text-gp-mint/30 focus:outline-none focus:ring-2 focus:ring-gp-mint/40"
+                  />
+                  {sttSupported && (
+                    <Button
+                      variant={sttActive ? 'destructive' : 'secondary'}
+                      size="icon"
+                      onClick={onToggleStt}
+                      title={sttActive ? 'Stop speech recognition' : 'Start speech recognition'}
+                      className="flex-shrink-0"
+                    >
+                      {sttActive ? '🎙️' : '🎤'}
+                    </Button>
+                  )}
+                  <Button variant="primary" size="sm" onClick={handleSend} disabled={!inputText.trim()}>
+                    Send
+                  </Button>
+                </div>
               </div>
             )}
           </div>

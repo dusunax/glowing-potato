@@ -21,6 +21,7 @@ export function DontSayIt({ onBack }: DontSayItProps) {
     castVote,
     sttSupported,
     sttActive,
+    sttError,
     toggleStt,
     sttInterim,
   } = useDontSayIt();
@@ -34,6 +35,7 @@ export function DontSayIt({ onBack }: DontSayItProps) {
         onCastVote={castVote}
         sttSupported={sttSupported}
         sttActive={sttActive}
+        sttError={sttError}
         onToggleStt={toggleStt}
         sttInterim={sttInterim}
       />
