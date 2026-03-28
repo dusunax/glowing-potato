@@ -10,6 +10,7 @@ import { InventoryPanel } from './components/panels/InventoryPanel';
 import { CraftingPanel } from './components/panels/CraftingPanel';
 import { DiscoveryPanel } from './components/panels/DiscoveryPanel';
 import { SpawnPanel } from './components/panels/SpawnPanel';
+import { DontSayIt } from './components/dont-say-it/DontSayIt';
 import { Button } from '@glowing-potato/ui';
 
 // --- Collection game screen ---
@@ -74,6 +75,10 @@ export default function App() {
 
   if (activeGame === 'collection') {
     return <CollectionGame onBack={() => setActiveGame(null)} />;
+  }
+
+  if (activeGame === 'dont-say-it') {
+    return <DontSayIt onBack={() => setActiveGame(null)} />;
   }
 
   return <GameLobby onSelectGame={setActiveGame} />;

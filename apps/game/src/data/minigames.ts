@@ -12,6 +12,14 @@ export const MINI_GAMES: MiniGame[] = [
     color: '#16a34a',
   },
   {
+    id: 'dont-say-it',
+    name: "Don't Say It",
+    emoji: '🤐',
+    description: "Chat freely — but don't say your secret forbidden words! Last one standing wins.",
+    status: 'available',
+    color: '#be185d',
+  },
+  {
     id: 'memory',
     name: 'Memory Match',
     emoji: '🃏',
