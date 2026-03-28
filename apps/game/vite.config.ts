@@ -1,28 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import path from 'path'
 
-const appRoot = resolve(dirname(fileURLToPath(import.meta.url)))
-const uiPackageRoot = resolve(appRoot, '../../packages/ui')
-const uiEntry = resolve(uiPackageRoot, 'src/index.ts')
-const themePackageRoot = resolve(appRoot, '../../packages/theme')
-const themeEntry = resolve(themePackageRoot, 'src/index.ts')
+const appRoot = process.cwd()
+const uiPackageRoot = path.resolve(appRoot, '../../packages/ui')
+const uiEntry = path.resolve(uiPackageRoot, 'src/index.ts')
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: [
-      // Exact-match aliases so subpath imports (e.g. /index.css, /tailwind)
-      // fall through to normal node_modules resolution.
-      { find: /^@glowing-potato\/ui$/, replacement: uiEntry },
-      { find: /^@glowing-potato\/theme$/, replacement: themeEntry },
+      { find: '@glowing-potato/ui', replacement: uiEntry },
     ],
   },
   server: {
     fs: {
-      allow: [appRoot, uiPackageRoot, themePackageRoot],
+      allow: [appRoot, uiPackageRoot],
     },
   },
 })
