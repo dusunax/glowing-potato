@@ -1,4 +1,6 @@
 import { getApps, getApp, initializeApp } from 'firebase/app';
+import type { Auth } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import type { Database } from 'firebase/database';
 import { getDatabase } from 'firebase/database';
 import type { Firestore } from 'firebase/firestore';
@@ -32,8 +34,22 @@ function hasFirestoreConfigValues() {
   );
 }
 
+let auth: Auth | null = null;
 let database: Database | null = null;
 let firestoreDb: Firestore | null = null;
+
+export function getFirebaseAuth(): Auth | null {
+  if (!config.apiKey || !config.authDomain) return null;
+  if (!auth) {
+    if (getApps().length === 0) {
+      const app = initializeApp(config);
+      auth = getAuth(app);
+    } else {
+      auth = getAuth(getApp());
+    }
+  }
+  return auth;
+}
 
 export function getRealtimeDb(): Database | null {
   if (!hasRealtimeDbConfigValues()) return null;
@@ -59,6 +75,10 @@ export function getFirestoreDb(): Firestore | null {
     }
   }
   return firestoreDb;
+}
+
+export function hasAuthConfig(): boolean {
+  return Boolean(config.apiKey && config.authDomain);
 }
 
 export function hasRealtimeDbConfig(): boolean {

@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { GameLobby } from './components/GameLobby';
 import { useGameState } from './hooks/useGameState';
+import { useAuth } from './hooks/useAuth';
 import { ConditionsPanel } from './components/panels/ConditionsPanel';
 import { InventoryPanel } from './components/panels/InventoryPanel';
 import { CraftingPanel } from './components/panels/CraftingPanel';
@@ -72,6 +73,7 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
 
 export default function App() {
   const [activeGame, setActiveGame] = useState<string | null>(null);
+  const { user, nickname, signInWithGoogle, signOut, updateNickname } = useAuth();
 
   if (activeGame === 'collection') {
     return <CollectionGame onBack={() => setActiveGame(null)} />;
@@ -81,5 +83,14 @@ export default function App() {
     return <DontSayIt onBack={() => setActiveGame(null)} />;
   }
 
-  return <GameLobby onSelectGame={setActiveGame} />;
+  return (
+    <GameLobby
+      onSelectGame={setActiveGame}
+      user={user}
+      nickname={nickname}
+      onSignIn={signInWithGoogle}
+      onSignOut={signOut}
+      onUpdateNickname={updateNickname}
+    />
+  );
 }
