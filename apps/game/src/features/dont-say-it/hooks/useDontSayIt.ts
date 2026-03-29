@@ -227,7 +227,7 @@ export interface UseDontSayItReturn {
   startGame: () => void;
   game: DsiGameState | null;
   sendMessage: (text: string) => void;
-  castVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
+  castVote: (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => void;
   sttSupported: boolean;
   sttActive: boolean;
   sttError: string | null;
@@ -495,7 +495,7 @@ export function useDontSayIt(): UseDontSayItReturn {
   // Voting
   // ---------------------------------------------------------------------------
   const castVote = useCallback(
-    (targetPlayerId: string, slotIndex: number, wordIndex: number) => {
+    (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => {
       setGame((prev) => {
         if (!prev || prev.phase !== 'voting') return prev;
         const newPlayers = prev.players.map((p) => {
@@ -503,6 +503,9 @@ export function useDontSayIt(): UseDontSayItReturn {
           const newSlots = p.wordSlots.map((slot, si) => {
             if (si !== slotIndex) return slot;
             const newVotes = [...slot.votesByWord];
+            if (previousWordIndex !== undefined && previousWordIndex >= 0) {
+              newVotes[previousWordIndex] = Math.max(0, (newVotes[previousWordIndex] ?? 0) - 1);
+            }
             newVotes[wordIndex] = (newVotes[wordIndex] ?? 0) + 1;
             return { ...slot, votesByWord: newVotes };
           });

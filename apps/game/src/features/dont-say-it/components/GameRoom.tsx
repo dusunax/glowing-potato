@@ -11,7 +11,7 @@ interface GameRoomProps {
   onLeave: () => void;
   onSendMessage: (text: string) => void;
   onStartGame: () => void;
-  onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
+  onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => void;
   sttSupported: boolean;
   sttActive: boolean;
   sttError: string | null;
@@ -160,7 +160,7 @@ function WaitingView({ game, onStartGame }: { game: DsiGameState; onStartGame: (
 
 interface VotingViewProps {
   game: DsiGameState;
-  onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
+  onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => void;
 }
 
 function VotingView({ game, onCastVote }: VotingViewProps) {
@@ -174,9 +174,10 @@ function VotingView({ game, onCastVote }: VotingViewProps) {
   function handleVote(player: DsiPlayer, slotIdx: number, wordIdx: number) {
     if (player.id === game.localPlayerId) return; // can't vote on own words
     const key = voteKey(player.id, slotIdx);
-    if (myVotes[key] !== undefined) return; // one pick only per opponent slot (3 options total)
+    const previous = myVotes[key];
+    if (previous === wordIdx) return; // same choice no-op
     setMyVotes((prev) => ({ ...prev, [key]: wordIdx }));
-    onCastVote(player.id, slotIdx, wordIdx);
+    onCastVote(player.id, slotIdx, wordIdx, previous);
   }
 
   const otherPlayers = game.players.filter((p) => p.id !== game.localPlayerId);
@@ -226,23 +227,19 @@ function VotingView({ game, onCastVote }: VotingViewProps) {
                   {slot.candidates.map((word, wi) => {
                     const key = voteKey(player.id, si);
                     const isMyVote = myVotes[key] === wi;
-                    const hasVoted = myVotes[key] !== undefined;
                     const totalVotes = slot.votesByWord.reduce((a, b) => a + b, 0);
                     const votePct = totalVotes > 0 ? Math.round((slot.votesByWord[wi] / totalVotes) * 100) : 0;
                     return (
-                      <button
-                        key={wi}
-                        onClick={() => handleVote(player, si, wi)}
-                        disabled={hasVoted}
-                        className={`flex-1 py-2 px-1 rounded-lg border text-xs font-medium transition-all ${
-                          isMyVote
-                            ? 'bg-gp-accent/30 border-gp-accent text-gp-mint'
-                            : hasVoted
-                              ? 'bg-gp-bg/30 border-gp-accent/10 text-gp-mint/30 cursor-not-allowed'
-                            : 'bg-gp-bg/50 border-gp-accent/20 text-gp-mint/70 hover:border-gp-accent/50 hover:text-gp-mint'
-                        }`}
-                      >
-                        <span className="block capitalize">{word}</span>
+                  <button
+                    key={wi}
+                    onClick={() => handleVote(player, si, wi)}
+                    className={`flex-1 py-2 px-1 rounded-lg border text-xs font-medium transition-all ${
+                      isMyVote
+                        ? 'bg-gp-accent/30 border-gp-accent text-gp-mint'
+                        : 'bg-gp-bg/50 border-gp-accent/20 text-gp-mint/70 hover:border-gp-accent/50 hover:text-gp-mint'
+                    }`}
+                  >
+                    <span className="block capitalize">{word}</span>
                         <VoteDots votes={slot.votesByWord} highlightIndex={wi} />
                         {totalVotes > 0 && (
                           <span className="block text-gp-mint/40 text-[10px] mt-0.5">{votePct}%</span>
