@@ -1,4 +1,4 @@
-# 🌿 Glowing Potato
+# Glowing Potato
 
 A cozy browser-based mini-game arcade built with React, TypeScript, and Vite — structured as an **npm workspaces monorepo**.
 
