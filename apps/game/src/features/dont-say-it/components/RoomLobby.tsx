@@ -56,6 +56,12 @@ export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBa
     }
   }, [showNicknamePopup, playerName]);
 
+  const publicRooms = rooms.filter((r) => r.visibility === 'public');
+  const publicSlots = [
+    ...publicRooms,
+    ...Array.from({ length: Math.max(0, 3 - publicRooms.length) }, () => null),
+  ];
+
   function handleCreate() {
     const title = newTitle.trim() || 'My Room';
     onCreateRoom(title, newVisibility, maxPlayers, playerName);
@@ -316,15 +322,15 @@ export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBa
           <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-3">
             Public Rooms
           </h2>
-          {rooms.filter((r) => r.visibility === 'public').length === 0 ? (
-            <p className="text-gp-mint/40 text-sm text-center py-6">No public rooms yet. Create one!</p>
-          ) : (
-            <div className="space-y-2">
-              {rooms.filter((r) => r.visibility === 'public').map((room) => (
-            <RoomRow key={room.id} room={room} onJoin={() => onJoinRoom(room.id, playerName)} />
-              ))}
-            </div>
-          )}
+          <div className="space-y-2">
+            {publicSlots.map((room, idx) => (
+              room ? (
+                <RoomRow key={room.id} room={room} onJoin={() => onJoinRoom(room.id, playerName)} />
+              ) : (
+                <RoomRow key={`empty-slot-${idx}`} room={null} />
+              )
+            ))}
+          </div>
         </div>
 
         {/* How to play */}
@@ -350,11 +356,23 @@ export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBa
 // --- Sub-component ---
 
 interface RoomRowProps {
-  room: DsiRoomSummary;
-  onJoin: () => void;
+  room: DsiRoomSummary | null;
+  onJoin?: () => void;
 }
 
 function RoomRow({ room, onJoin }: RoomRowProps) {
+  if (!room) {
+    return (
+      <div className="flex items-center gap-3 p-3 rounded-xl bg-gp-surface/20 border border-dashed border-gp-accent/20">
+        <span className="text-xl text-gp-mint/30">◻</span>
+        <div className="flex-1">
+          <div className="text-gp-mint/40 text-sm">Empty Slot</div>
+          <div className="text-gp-mint/20 text-xs">Waiting for a room...</div>
+        </div>
+      </div>
+    );
+  }
+
   const full = room.playerCount >= room.maxPlayers;
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl bg-gp-surface/50 border border-gp-accent/20 hover:border-gp-accent/50 transition-colors">

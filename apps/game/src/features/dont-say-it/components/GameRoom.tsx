@@ -573,8 +573,11 @@ function FinishedView({
   onLeave: () => void;
   onShowReplay: () => void;
 }) {
-  const winner = game.players.find((p) => p.id === game.winnerId);
-  const isLocalWinner = game.winnerId === game.localPlayerId;
+  const winner =
+    game.players.find((p) => p.id === game.winnerId && !p.isOut) ??
+    (game.players.filter((p) => !p.isOut).length === 1 ? game.players.find((p) => !p.isOut) : null);
+  const winnerId = winner?.id ?? null;
+  const isLocalWinner = winnerId === game.localPlayerId;
   const ranking = getRanking(game);
 
   function getResultText() {
@@ -585,10 +588,10 @@ function FinishedView({
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6 text-center">
-      <div className="text-6xl">{isLocalWinner ? '🏆' : winner ? '🎉' : '🤝'}</div>
+      <div className="text-6xl">{isLocalWinner ? '🏆' : winner ? '🙁' : '🤝'}</div>
       <div>
         <h2 className="text-3xl font-bold text-gp-mint mb-2">
-          {winner ? (isLocalWinner ? 'You Win!' : `${winner.name} Wins!`) : 'It\'s a Draw!'}
+          {winner ? (isLocalWinner ? 'You Win!' : `Player ${winner.name} Wins!`) : 'It\'s a Draw!'}
         </h2>
         <p className="text-gp-mint/60 text-sm">
           {getResultText()}
@@ -615,7 +618,7 @@ function FinishedView({
                   <span>{entry.player.isBot ? '🤖' : '👤'}</span>
                   <span className={`truncate ${entry.player.isOut ? 'text-red-400 line-through' : 'text-gp-mint'}`}>
                     {isLocal ? 'You' : entry.player.name}
-                    {entry.player.id === game.winnerId ? ' 🏆' : ''}
+                    {entry.player.id === winnerId ? ' 🏆' : ''}
                   </span>
                 </span>
                 <span className="text-xs shrink-0">

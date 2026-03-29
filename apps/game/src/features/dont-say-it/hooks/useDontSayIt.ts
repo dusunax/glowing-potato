@@ -1,8 +1,19 @@
-// Core state hook for the "Don't Say It" mini-game.
-// Manages: room lobby list, room creation/joining, game phases (waiting → voting
-// → playing → finished), bot AI, voting timer, and Web Speech API integration.
+// Realtime Firebase implementation for the "Don't Say It" mini-game.
+// Rooms, players, chat, votes, and phase transitions are synchronized through
+// Realtime Database listeners.
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  onValue,
+  push,
+  ref,
+  onDisconnect,
+  get,
+  runTransaction,
+  set,
+  remove,
+} from 'firebase/database';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import type {
   DsiRoomSummary,
   DsiPlayer,
@@ -13,6 +24,11 @@ import type {
   RoomVisibility,
 } from '../types';
 import { pickWords } from '../data/words';
+import {
+  getFirestoreDb,
+  getRealtimeDb,
+  hasRealtimeDbConfig,
+} from '../lib/firebase';
 
 // ---------------------------------------------------------------------------
 // Web Speech API minimal types (not universally available in lib.dom.d.ts)
@@ -66,50 +82,76 @@ const VOTING_SECONDS = 10;
 const PLAY_SECONDS = 60;
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 4;
+const ROOM_ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const RTDB_GAME_PATH = 'games/dont_say_it';
+const RTDB_ROOMS_PATH = `${RTDB_GAME_PATH}/rooms`;
+const FIRESTORE_HISTORY_COLLECTION = 'game_histories';
+const FIRESTORE_HISTORY_GAME_TYPE = 'dont_say_it';
+const FIRESTORE_HISTORY_DOC_COLLECTION = 'rooms';
 
-const BOT_NAMES = ['Alex', 'Sam', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley'];
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-const BOT_MESSAGES = [
-  "what do you think about this game?",
-  "i really enjoy playing games like this",
-  "that's a great point, i agree",
-  "hmm let me think about that for a second",
-  "this is so much fun!",
-  "i love the design of this game",
-  "have you tried the other games in the lobby?",
-  "i can't believe how fast the time goes",
-  "let's keep the conversation going",
-  "nice, i didn't know that",
-  "oh interesting, tell me more",
-  "i was just thinking the same thing",
-  "can you give me a hint?",
-  "i remember reading a book about that",
-  "my dog would love this game",
-  "it reminds me of a card game",
-  "the weather outside is beautiful today",
-  "i'd like some coffee right now",
-  "spring is my favourite time of year",
-  "the sky looks really blue today",
-  "i saw a bird on my way here",
-  "did you sleep well last night?",
-  "i dreamed about a forest last night",
-  "the music in this game is nice",
-  "i could eat pizza every day",
-  "the sun is so bright this morning",
-  "let's dance if we win!",
-  "i hope nobody gets out too soon",
-  "watch out, choose your words carefully",
-  "this round is getting exciting",
-  "i've been playing games all day",
-  "my friend introduced me to this",
-  "are you ready for the next round?",
-  "good luck everyone!",
-  "almost there, stay focused",
-  "exciting stuff happening here",
-  "i wonder who will win this round",
-  "last one standing wins, right?",
-  "three more seconds, don't slip up",
-];
+interface DbWordSlot {
+  candidates: string[];
+  finalWord?: string | null;
+  votesByWord?: number[];
+}
+
+interface DbPlayer {
+  name: string;
+  isOut: boolean;
+  isBot: boolean;
+  wordSlots: DbWordSlot[];
+}
+
+interface DbVoteMap {
+  [targetId: string]: {
+    [slotIdx: string]: {
+      [voterId: string]: number;
+    };
+  };
+}
+
+interface DbRoom {
+  title: string;
+  visibility: RoomVisibility;
+  maxPlayers: number;
+  hostId: string;
+  phase: GamePhase;
+  winnerId: string | null;
+  votingTimeLeft: number;
+  gameTimeLeft: number;
+  players: Record<string, DbPlayer>;
+  messages?: Record<string, DsiChatMessage>;
+  votes?: DbVoteMap;
+}
+
+type DbRooms = Record<string, DbRoom>;
+
+interface GameHistoryPlayerSnapshot {
+  id: string;
+  name: string;
+  isBot: boolean;
+  isOut: boolean;
+  finalWords: (string | null)[];
+}
+
+interface GameHistorySnapshot {
+  gameType: 'dont_say_it';
+  roomId: string;
+  roomTitle: string;
+  roomVisibility: RoomVisibility;
+  maxPlayers: number;
+  hostId: string;
+  winnerId: string | null;
+  players: GameHistoryPlayerSnapshot[];
+  messages: DsiChatMessage[];
+  eliminationOrder: string[];
+  recordedAt: ReturnType<typeof serverTimestamp>;
+  endedAt: number;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -120,8 +162,56 @@ function uid(): string {
   return `${Date.now()}-${++_idCounter}`;
 }
 
-function randomId(): string {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
+function randomRoomId(length = 6) {
+  let result = '';
+  for (let i = 0; i < length; i += 1) {
+    const idx = Math.floor(Math.random() * ROOM_ID_CHARS.length);
+    result += ROOM_ID_CHARS[idx];
+  }
+  return result;
+}
+
+function sanitizePlayerName(name: string) {
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 18) : 'You';
+}
+
+function normalizeMaxPlayers(value: number): number {
+  const maxPlayers = Math.floor(Number(value));
+  if (!Number.isFinite(maxPlayers)) return MAX_PLAYERS;
+  return Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, maxPlayers));
+}
+
+function localPlayerStorageId() {
+  if (typeof window === 'undefined') return uid();
+  const key = 'dsi-player-id';
+  const existing = window.localStorage.getItem(key);
+  if (existing) return existing;
+  const next = uid();
+  window.localStorage.setItem(key, next);
+  return next;
+}
+
+function hiddenWordSlots(): DsiWordSlot[] {
+  return [
+    {
+      candidates: ['***', '***', '***'],
+      votesByWord: Array(CANDIDATES_PER_SLOT).fill(0) as number[],
+      finalWord: null,
+    },
+  ];
+}
+
+type AnyWordSlot = DbWordSlot | DsiWordSlot;
+
+function normalizeDbWordSlot(slot: AnyWordSlot): DsiWordSlot {
+  return {
+    candidates: slot.candidates,
+    finalWord: slot.finalWord ?? null,
+    votesByWord: Array.isArray(slot.votesByWord)
+      ? slot.votesByWord
+      : Array(slot.candidates.length).fill(0) as number[],
+  };
 }
 
 function buildWordSlots(allAssigned: string[]): DsiWordSlot[] {
@@ -136,21 +226,29 @@ function buildWordSlots(allAssigned: string[]): DsiWordSlot[] {
   });
 }
 
-function resolveSlots(player: DsiPlayer): DsiPlayer {
-  const resolvedSlots = player.wordSlots.map((slot) => {
-    const max = Math.max(...slot.votesByWord);
-    const tiedIndices = slot.votesByWord
-      .map((v, i) => ({ v, i }))
-      .filter(({ v }) => v === max)
-      .map(({ i }) => i);
-    const winnerIdx = tiedIndices[Math.floor(Math.random() * tiedIndices.length)];
-    return { ...slot, finalWord: slot.candidates[winnerIdx] };
+function voteCountsForSlot(
+  slot: DsiWordSlot,
+  slotVotes: Record<string, number> | undefined,
+): number[] {
+  const votesByWord = Array(slot.candidates.length).fill(0) as number[];
+  if (!slotVotes) return votesByWord;
+  Object.values(slotVotes).forEach((wordIdx) => {
+    if (Number.isInteger(wordIdx) && wordIdx >= 0 && wordIdx < votesByWord.length) {
+      votesByWord[wordIdx] += 1;
+    }
   });
-  return { ...player, wordSlots: resolvedSlots };
+  return votesByWord;
 }
 
-function getActivePlayers(players: DsiPlayer[]): DsiPlayer[] {
-  return players.filter((p) => !p.isOut);
+function resolveWordSlot(slot: DsiWordSlot, votesByWord: number[]): DsiWordSlot {
+  const max = Math.max(...votesByWord);
+  const ties = votesByWord.map((v, idx) => ({ v, idx })).filter((item) => item.v === max);
+  const winnerIdx = ties[Math.floor(Math.random() * Math.max(1, ties.length))]?.idx ?? 0;
+  return {
+    ...slot,
+    votesByWord,
+    finalWord: slot.candidates[winnerIdx] ?? null,
+  };
 }
 
 function containsWord(text: string, word: string): boolean {
@@ -158,61 +256,120 @@ function containsWord(text: string, word: string): boolean {
   return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
 }
 
-function findTriggeredWord(player: DsiPlayer, text: string): string | null {
+function getUniqueOutOrder(messages: DsiChatMessage[]): string[] {
+  const outPlayers = new Set<string>();
+  return messages.reduce((acc, msg) => {
+    if (!msg.triggeredWord) return acc;
+    if (!outPlayers.has(msg.playerId)) {
+      outPlayers.add(msg.playerId);
+      acc.push(msg.playerId);
+    }
+    return acc;
+  }, [] as string[]);
+}
+
+function buildGameHistory(game: DsiGameState): GameHistorySnapshot {
+  return {
+    gameType: 'dont_say_it',
+    roomId: game.roomId,
+    roomTitle: game.roomTitle,
+    roomVisibility: game.roomVisibility,
+    maxPlayers: game.maxPlayers,
+    hostId: game.hostId,
+    winnerId: game.winnerId,
+    players: game.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      isBot: player.isBot,
+      isOut: player.isOut,
+      finalWords: player.wordSlots.map((slot) => slot.finalWord),
+    })),
+    messages: game.messages,
+    eliminationOrder: getUniqueOutOrder(game.messages),
+    recordedAt: serverTimestamp(),
+    endedAt: Date.now(),
+  };
+}
+
+function roomPath(roomId: string): string {
+  return `${RTDB_ROOMS_PATH}/${roomId}`;
+}
+
+function findTriggeredWordFromState(players: DsiPlayer[], playerId: string, text: string): string | null {
+  const player = players.find((p) => p.id === playerId);
+  if (!player) return null;
   for (const slot of player.wordSlots) {
     if (slot.finalWord && containsWord(text, slot.finalWord)) return slot.finalWord;
   }
   return null;
 }
 
-function applyMessage(prev: DsiGameState, speakerId: string, text: string): DsiGameState {
-  const player = prev.players.find((p) => p.id === speakerId);
-  if (!player || player.isOut) return prev;
+function normalizeRoomSummary(rooms: DbRooms): DsiRoomSummary[] {
+  return Object.entries(rooms)
+    .map(([id, room]) => ({
+      id,
+      title: room.title,
+      visibility: room.visibility,
+      playerCount: Object.keys(room.players ?? {}).length,
+      maxPlayers: room.maxPlayers,
+    }))
+    .sort((a, b) => b.playerCount - a.playerCount);
+}
 
-  const triggered = findTriggeredWord(player, text);
-  const msg: DsiChatMessage = {
-    id: uid(),
-    playerId: speakerId,
-    playerName: player.name,
-    text,
-    timestamp: Date.now(),
-    triggeredWord: triggered ?? undefined,
-  };
-
-  let newPlayers = prev.players;
-  let newPhase: GamePhase = prev.phase;
-  let newWinnerId = prev.winnerId;
-
-  if (triggered) {
-    newPlayers = prev.players.map((p) =>
-      p.id === speakerId ? { ...p, isOut: true } : p
+function derivePlayerRows(
+  roomPlayers: Record<string, DbPlayer> | undefined,
+  votes: DbVoteMap | undefined,
+): DsiPlayer[] {
+  if (!roomPlayers) return [];
+  return Object.entries(roomPlayers).map(([id, player]) => {
+    const filteredVotes = Object.fromEntries(
+      Object.entries(votes?.[id] ?? {}).map(([slotIdx, slotVotes]) => [
+        slotIdx,
+        Object.fromEntries(
+          Object.entries(slotVotes).filter(([voterId]) => voterId in roomPlayers),
+        ),
+      ]),
     );
-    const remaining = getActivePlayers(newPlayers);
-    if (remaining.length === 1) {
-      newPhase = 'finished';
-      newWinnerId = remaining[0].id;
-    } else if (remaining.length === 0) {
-      newPhase = 'finished';
-    }
-  }
-
-  return { ...prev, messages: [...prev.messages, msg], players: newPlayers, phase: newPhase, winnerId: newWinnerId };
+    const nextWordSlots = (player.wordSlots ?? []).map((slot, slotIdx) => {
+      const normalizedSlot = normalizeDbWordSlot(slot);
+      return {
+        ...normalizedSlot,
+        votesByWord: voteCountsForSlot(normalizedSlot, filteredVotes?.[String(slotIdx)]),
+      };
+    });
+    return {
+      id,
+      name: player.name,
+      isOut: player.isOut,
+      isBot: player.isBot,
+      wordSlots: nextWordSlots,
+    };
+  });
 }
 
-function sanitizePlayerName(name: string): string {
-  const trimmed = name.trim();
-  return trimmed.length > 0 ? trimmed : 'You';
+function resolveAllPlayerSlots(players: Record<string, DbPlayer>, votes: DbVoteMap | undefined): Record<string, DbPlayer> {
+  const nextPlayers: Record<string, DbPlayer> = {};
+  Object.entries(players).forEach(([id, player]) => {
+    const filteredVotes = Object.fromEntries(
+      Object.entries(votes?.[id] ?? {}).map(([slotIdx, slotVotes]) => [
+        slotIdx,
+        Object.fromEntries(
+          Object.entries(slotVotes).filter(([voterId]) => voterId in players),
+        ),
+      ]),
+    );
+    const nextSlots = (player.wordSlots ?? hiddenWordSlots()).map((slot, slotIdx) => {
+      const normalizedSlot = normalizeDbWordSlot(slot);
+      const voteCounts = voteCountsForSlot(normalizedSlot, filteredVotes?.[String(slotIdx)]);
+      return resolveWordSlot(normalizedSlot, voteCounts);
+    });
+    nextPlayers[id] = {
+      ...player,
+      wordSlots: nextSlots,
+    };
+  });
+  return nextPlayers;
 }
-
-// ---------------------------------------------------------------------------
-// Initial lobby rooms
-// ---------------------------------------------------------------------------
-
-const INITIAL_ROOMS: DsiRoomSummary[] = [
-  { id: 'LOBBY1', title: 'Chill Vibes 🌿', visibility: 'public', playerCount: 1, maxPlayers: MAX_PLAYERS },
-  { id: 'LOBBY2', title: 'Word Masters 📚', visibility: 'public', playerCount: 2, maxPlayers: MAX_PLAYERS },
-  { id: 'SECRET', title: 'Secret Room 🔒', visibility: 'private', playerCount: 1, maxPlayers: MAX_PLAYERS },
-];
 
 // ---------------------------------------------------------------------------
 // Hook return type
@@ -220,14 +377,14 @@ const INITIAL_ROOMS: DsiRoomSummary[] = [
 
 export interface UseDontSayItReturn {
   rooms: DsiRoomSummary[];
-  createRoom: (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => void;
-  joinRoom: (roomId: string, playerName: string) => void;
-  joinPrivateRoom: (roomId: string, playerName: string) => 'ok' | 'not-found' | 'full';
-  leaveRoom: () => void;
-  startGame: () => void;
+  createRoom: (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => Promise<void> | void;
+  joinRoom: (roomId: string, playerName: string) => Promise<void> | void;
+  joinPrivateRoom: (roomId: string, playerName: string) => Promise<'ok' | 'not-found' | 'full'> | 'ok' | 'not-found' | 'full';
+  leaveRoom: () => Promise<void> | void;
+  startGame: () => Promise<void> | void;
   game: DsiGameState | null;
-  sendMessage: (text: string) => void;
-  castVote: (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => void;
+  sendMessage: (text: string) => Promise<void> | void;
+  castVote: (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => Promise<void> | void;
   sttSupported: boolean;
   sttActive: boolean;
   sttError: string | null;
@@ -240,8 +397,10 @@ export interface UseDontSayItReturn {
 // ---------------------------------------------------------------------------
 
 export function useDontSayIt(): UseDontSayItReturn {
-  const [rooms, setRooms] = useState<DsiRoomSummary[]>(INITIAL_ROOMS);
+  const [rooms, setRooms] = useState<DsiRoomSummary[]>([]);
   const [game, setGame] = useState<DsiGameState | null>(null);
+  const [localRoomId, setLocalRoomId] = useState<string | null>(null);
+  const [localPlayerId, setLocalPlayerId] = useState<string | null>(null);
 
   const [sttActive, setSttActive] = useState(false);
   const [sttInterim, setSttInterim] = useState('');
@@ -251,291 +410,642 @@ export function useDontSayIt(): UseDontSayItReturn {
     typeof window !== 'undefined' &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
-  const votingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const gameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const botJoinTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const botChatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const db = getRealtimeDb();
+  const firestoreDb = getFirestoreDb();
+  const hostVotingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hostGameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const roomUnsubRef = useRef<(() => void) | null>(null);
+  const roomListUnsubRef = useRef<(() => void) | null>(null);
+  const onDisconnectRef = useRef<ReturnType<typeof onDisconnect> | null>(null);
+  const roomCleanupDisconnectRef = useRef<ReturnType<typeof onDisconnect> | null>(null);
+  const finishedGameArchiveRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!hasRealtimeDbConfig() || !db) return;
 
-  function normalizeMaxPlayers(value: number): number {
-    const maxPlayers = Math.floor(Number(value));
-    if (!Number.isFinite(maxPlayers)) return MAX_PLAYERS;
-    return Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, maxPlayers));
-  }
+    const roomsRef = ref(db, RTDB_ROOMS_PATH);
+    roomListUnsubRef.current = onValue(roomsRef, (snapshot) => {
+      const payload = snapshot.val() as DbRooms | null;
+      if (!payload) {
+        setRooms([]);
+        return;
+      }
+      setRooms(normalizeRoomSummary(payload).filter((room) => room.playerCount <= room.maxPlayers));
+    });
+
+    return () => {
+      roomListUnsubRef.current?.();
+    };
+  }, [db]);
+
+  const stopHostTimers = useCallback(() => {
+    if (hostVotingTimerRef.current) clearInterval(hostVotingTimerRef.current);
+    if (hostGameTimerRef.current) clearInterval(hostGameTimerRef.current);
+    hostVotingTimerRef.current = null;
+    hostGameTimerRef.current = null;
+  }, []);
+
+  const setDisconnectCleanup = useCallback(
+    async (roomId: string, playerId: string) => {
+      if (!db) return;
+      if (onDisconnectRef.current) {
+        try {
+          await onDisconnectRef.current.cancel();
+        } catch {
+          // Ignore cleanup errors.
+        }
+      }
+
+      const playerPathRef = ref(db, `${roomPath(roomId)}/players/${playerId}`);
+      onDisconnectRef.current = onDisconnect(playerPathRef);
+      try {
+        await onDisconnectRef.current.remove();
+      } catch {
+        onDisconnectRef.current = null;
+      }
+    },
+    [db],
+  );
+
+  const clearRoomCleanupDisconnect = useCallback(async () => {
+    if (!roomCleanupDisconnectRef.current) return;
+    try {
+      await roomCleanupDisconnectRef.current.cancel();
+    } catch {
+      /* ignore */
+    }
+    roomCleanupDisconnectRef.current = null;
+  }, []);
+
+  const setRoomCleanupDisconnect = useCallback(
+    async (roomId: string) => {
+      if (!db) return;
+      if (roomCleanupDisconnectRef.current) {
+        try {
+          await roomCleanupDisconnectRef.current.cancel();
+        } catch {
+          /* ignore */
+        }
+      }
+      roomCleanupDisconnectRef.current = onDisconnect(ref(db, roomPath(roomId)));
+      try {
+        await roomCleanupDisconnectRef.current.remove();
+      } catch {
+        roomCleanupDisconnectRef.current = null;
+      }
+    },
+    [db],
+  );
+
+  const clearDisconnectCleanup = useCallback(async () => {
+    if (!onDisconnectRef.current) return;
+    try {
+      await onDisconnectRef.current.cancel();
+    } catch {
+      /* ignore */
+    }
+    onDisconnectRef.current = null;
+    await clearRoomCleanupDisconnect();
+  }, [clearRoomCleanupDisconnect]);
+
+  const upsertUserProfile = useCallback(
+    async (playerId: string, playerName: string, roomId: string | null) => {
+      if (!firestoreDb || !playerId) return;
+      const docRef = doc(firestoreDb, 'users', playerId);
+      const normalized = sanitizePlayerName(playerName);
+      await setDoc(
+        docRef,
+        {
+          playerId,
+          lastNickname: normalized,
+          lastRoomId: roomId,
+          lastSeenAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    },
+    [firestoreDb],
+  );
+
+  const archiveFinishedGame = useCallback(async (targetGame: DsiGameState) => {
+    if (!targetGame?.roomId) return;
+    if (finishedGameArchiveRef.current.has(targetGame.roomId)) return;
+    finishedGameArchiveRef.current.add(targetGame.roomId);
+
+    setRooms((prev) => prev.filter((room) => room.id !== targetGame.roomId));
+
+    if (firestoreDb) {
+      const historyDoc = doc(
+        firestoreDb,
+        FIRESTORE_HISTORY_COLLECTION,
+        FIRESTORE_HISTORY_GAME_TYPE,
+        FIRESTORE_HISTORY_DOC_COLLECTION,
+        targetGame.roomId,
+      );
+      const history = buildGameHistory(targetGame);
+      try {
+        await setDoc(historyDoc, history, { merge: true });
+      } catch (error) {
+        console.error('Failed to save finished game history to game_histories/dont_say_it/rooms', error);
+      }
+    }
+
+    if (!db) return;
+    try {
+      await remove(ref(db, roomPath(targetGame.roomId)));
+    } catch (error) {
+      console.error('Failed to delete room after game finished', error);
+    }
+  }, [db, firestoreDb]);
+
+  const refreshLocalPlayer = useCallback(() => {
+    setLocalPlayerId(localPlayerStorageId());
+  }, []);
+
+  useEffect(() => {
+    refreshLocalPlayer();
+  }, [refreshLocalPlayer]);
 
   useEffect(() => {
     return () => {
-      if (votingTimerRef.current) clearInterval(votingTimerRef.current);
-      if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-      botJoinTimersRef.current.forEach(clearTimeout);
-      if (botChatTimerRef.current) clearTimeout(botChatTimerRef.current);
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch { /* ignore */ }
-      }
+      void clearDisconnectCleanup();
     };
-  }, []);
-
-  // ---------------------------------------------------------------------------
-  // Voting timer
-  // ---------------------------------------------------------------------------
-  const startVotingTimer = useCallback(() => {
-    if (votingTimerRef.current) clearInterval(votingTimerRef.current);
-    votingTimerRef.current = setInterval(() => {
-      setGame((prev) => {
-        if (!prev || prev.phase !== 'voting') {
-          clearInterval(votingTimerRef.current!);
-          return prev;
-        }
-        const newTime = prev.votingTimeLeft - 1;
-        if (newTime <= 0) {
-          clearInterval(votingTimerRef.current!);
-          return {
-            ...prev,
-            votingTimeLeft: 0,
-            gameTimeLeft: PLAY_SECONDS,
-            phase: 'playing',
-            players: prev.players.map(resolveSlots),
-          };
-        }
-        return { ...prev, votingTimeLeft: newTime };
-      });
-    }, 1000);
-  }, []);
-
-  // ---------------------------------------------------------------------------
-  // Playing timer
-  // ---------------------------------------------------------------------------
-  const startGameTimer = useCallback(() => {
-    if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-    gameTimerRef.current = setInterval(() => {
-      setGame((prev) => {
-        if (!prev || prev.phase !== 'playing') {
-          clearInterval(gameTimerRef.current!);
-          return prev;
-        }
-
-        const nextTime = prev.gameTimeLeft - 1;
-        if (nextTime <= 0) {
-          clearInterval(gameTimerRef.current!);
-          const alive = getActivePlayers(prev.players);
-          const winnerId = alive.length === 1 ? alive[0].id : null;
-          return { ...prev, gameTimeLeft: 0, phase: 'finished', winnerId };
-        }
-        return { ...prev, gameTimeLeft: nextTime };
-      });
-    }, 1000);
-  }, []);
-
-  // ---------------------------------------------------------------------------
-  // Bot chat
-  // ---------------------------------------------------------------------------
-  const scheduleBotChat = useCallback(() => {
-    if (botChatTimerRef.current) clearTimeout(botChatTimerRef.current);
-    botChatTimerRef.current = setTimeout(() => {
-      setGame((prev) => {
-        if (!prev || prev.phase !== 'playing') return prev;
-        const bots = getActivePlayers(prev.players).filter((p) => p.isBot);
-        if (bots.length === 0) return prev;
-        const bot = bots[Math.floor(Math.random() * bots.length)];
-        const text = BOT_MESSAGES[Math.floor(Math.random() * BOT_MESSAGES.length)];
-        return applyMessage(prev, bot.id, text);
-      });
-      scheduleBotChat();
-    }, 4000 + Math.random() * 6000);
-  }, []);
+  }, [clearDisconnectCleanup]);
 
   useEffect(() => {
-    if (game?.phase === 'playing') {
-      scheduleBotChat();
-      startGameTimer();
-    } else {
-      if (botChatTimerRef.current) clearTimeout(botChatTimerRef.current);
-      if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.phase, startGameTimer]);
-
-  // ---------------------------------------------------------------------------
-  // Bot joins
-  // ---------------------------------------------------------------------------
-  function scheduleBotJoins(allAssigned: string[], maxPlayers = MAX_PLAYERS) {
-    const normalizedMaxPlayers = normalizeMaxPlayers(maxPlayers);
-    const usedBotNames = new Set<string>();
-    botJoinTimersRef.current.forEach(clearTimeout);
-    botJoinTimersRef.current = [];
-
-    function addNextBot() {
-      setGame((prev) => {
-        if (!prev || prev.phase !== 'waiting') return prev;
-        if (prev.players.length >= normalizedMaxPlayers) return prev;
-
-        const availableNames = BOT_NAMES.filter((n) => !usedBotNames.has(n));
-        if (availableNames.length === 0) return prev;
-
-        const name = availableNames[Math.floor(Math.random() * availableNames.length)];
-        usedBotNames.add(name);
-
-        const botSlots = buildWordSlots([...allAssigned]);
-        botSlots.forEach((s) => allAssigned.push(...s.candidates));
-
-        const bot: DsiPlayer = { id: uid(), name, wordSlots: botSlots, isOut: false, isBot: true };
-        const newPlayers = [...prev.players, bot];
-        return { ...prev, players: newPlayers };
-      });
+    if (!db || !localRoomId) {
+      roomUnsubRef.current?.();
+      roomUnsubRef.current = null;
+      setGame(null);
+      stopHostTimers();
+      return;
     }
 
-    botJoinTimersRef.current = [1500, 3000, 4500].map((d) => setTimeout(addNextBot, d));
-  }
+    const roomRef = ref(db, roomPath(localRoomId));
+    roomUnsubRef.current = onValue(roomRef, (snapshot) => {
+      const payload = snapshot.val() as DbRoom | null;
+      if (!payload) {
+        setGame((prev) => {
+          if (prev?.phase === 'finished') {
+            return prev;
+          }
+          setLocalRoomId((prevRoomId) => (prevRoomId === localRoomId ? null : prevRoomId));
+          stopHostTimers();
+          return null;
+        });
+        return;
+      }
 
-  // ---------------------------------------------------------------------------
-  // Room enter helper
-  // ---------------------------------------------------------------------------
-  const enterRoom = useCallback(
-    (
-      roomId: string,
-      title: string,
-      visibility: RoomVisibility,
-      isHost: boolean,
-      maxPlayers = MAX_PLAYERS,
-      playerName = 'You',
-    ) => {
-      const normalizedMaxPlayers = normalizeMaxPlayers(maxPlayers);
-      const localId = uid();
-      const allAssigned: string[] = [];
-      const localPlayer: DsiPlayer = {
-        id: localId,
-        name: sanitizePlayerName(playerName),
-        wordSlots: buildWordSlots(allAssigned),
-        isOut: false,
-        isBot: false,
-      };
+      const playersMap = payload.players ?? {};
+      const playerCount = Object.keys(playersMap).length;
+
+      const isFinalHost =
+        !!(
+          localPlayerId &&
+          payload.hostId === localPlayerId &&
+          playerCount === 1 &&
+          payload.phase !== 'finished'
+        );
+      if (isFinalHost) {
+        void setRoomCleanupDisconnect(localRoomId);
+      } else {
+        void clearRoomCleanupDisconnect();
+      }
+
+      if (playerCount === 0) {
+        void remove(roomRef);
+        setGame((prev) => (prev?.phase === 'finished' ? prev : null));
+        setLocalRoomId((prevRoomId) => (prevRoomId === localRoomId ? null : prevRoomId));
+        stopHostTimers();
+        return;
+      }
+
+      if (payload.phase === 'voting' && playerCount < MIN_PLAYERS) {
+        setRooms((prev) => prev.filter((room) => room.id !== localRoomId));
+        setGame((prev) => (prev?.phase === 'finished' ? prev : null));
+        setLocalRoomId((prevRoomId) => (prevRoomId === localRoomId ? null : prevRoomId));
+        stopHostTimers();
+        void remove(roomRef);
+        return;
+      }
+
+      if (payload.hostId && !playersMap[payload.hostId]) {
+        void runTransaction(roomRef, (current: DbRoom | null) => {
+          if (!current || !current.players) return current;
+          const hostId = current.hostId;
+          if (hostId && current.players[hostId]) return current;
+          const nextHostId = Object.keys(current.players)[0];
+          if (!nextHostId) return null;
+          return {
+            ...current,
+            hostId: nextHostId,
+          };
+        });
+      }
+
+      const players = derivePlayerRows(playersMap, payload.votes);
+      const messageList = Object.values(payload.messages ?? {})
+        .slice()
+        .sort((a, b) => a.timestamp - b.timestamp);
+      const selectedLocalId = localPlayerId;
+      const localPlayer = players.find((p) => p.id === selectedLocalId);
+
       setGame({
-        phase: 'waiting',
-        roomId,
-        roomTitle: title,
-        roomVisibility: visibility,
-        localPlayerId: localId,
-        isHost,
-        maxPlayers: normalizedMaxPlayers,
-        players: [localPlayer],
-        messages: [],
-        gameTimeLeft: PLAY_SECONDS,
-        votingTimeLeft: VOTING_SECONDS,
-        winnerId: null,
+        phase: payload.phase,
+        roomId: localRoomId,
+        roomTitle: payload.title,
+        roomVisibility: payload.visibility,
+        hostId: payload.hostId,
+        localPlayerId: selectedLocalId ?? '',
+        isHost: selectedLocalId === payload.hostId,
+        maxPlayers: payload.maxPlayers,
+        players,
+        messages: messageList,
+        votingTimeLeft: payload.votingTimeLeft,
+        gameTimeLeft: payload.gameTimeLeft,
+        winnerId: payload.winnerId,
       });
-      scheduleBotJoins(allAssigned, normalizedMaxPlayers);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [startVotingTimer]
+
+      if (!localPlayer) {
+        setGame((prev) => {
+          if (!prev) return prev;
+          return { ...prev, localPlayerId: localPlayerId ?? '' };
+        });
+      }
+    });
+
+    return () => {
+      roomUnsubRef.current?.();
+      roomUnsubRef.current = null;
+      stopHostTimers();
+    };
+  }, [
+    db,
+    localRoomId,
+    localPlayerId,
+    stopHostTimers,
+    setRoomCleanupDisconnect,
+    clearRoomCleanupDisconnect,
+  ]);
+
+  const startHostVotingTimer = useCallback(() => {
+    if (!db || !localRoomId || !localPlayerId || hostVotingTimerRef.current) return;
+    const roomRef = ref(db, roomPath(localRoomId));
+    hostVotingTimerRef.current = setInterval(async () => {
+      await runTransaction(roomRef, (current: DbRoom | null) => {
+        if (!current || current.phase !== 'voting' || current.hostId !== localPlayerId) return current;
+        const newLeft = Math.max(0, Number(current.votingTimeLeft || 0) - 1);
+        if (newLeft > 0) {
+          return { ...current, votingTimeLeft: newLeft };
+        }
+
+        const nextPlayers = resolveAllPlayerSlots(current.players, current.votes);
+        return {
+          ...current,
+          phase: 'playing',
+          votingTimeLeft: 0,
+          gameTimeLeft: PLAY_SECONDS,
+          players: nextPlayers,
+          votes: {},
+        };
+      });
+    }, 1000);
+  }, [db, localPlayerId, localRoomId]);
+
+  const startHostGameTimer = useCallback(() => {
+    if (!db || !localRoomId || !localPlayerId || hostGameTimerRef.current) return;
+    const roomRef = ref(db, roomPath(localRoomId));
+    hostGameTimerRef.current = setInterval(async () => {
+      await runTransaction(roomRef, (current: DbRoom | null) => {
+        if (!current || current.phase !== 'playing' || current.hostId !== localPlayerId) return current;
+        const next = Number(current.gameTimeLeft || 0) - 1;
+        if (next > 0) {
+          return { ...current, gameTimeLeft: next };
+        }
+
+        const alivePlayerIds = Object.entries(current.players ?? {}).filter(([, player]) => !player.isOut).map(([id]) => id);
+        const winnerId = alivePlayerIds.length === 1 ? alivePlayerIds[0] : null;
+        return {
+          ...current,
+          phase: 'finished',
+          gameTimeLeft: 0,
+          winnerId,
+        };
+      });
+    }, 1000);
+  }, [db, localPlayerId, localRoomId]);
+
+  useEffect(() => {
+    if (!game || !game.isHost || !localRoomId) {
+      stopHostTimers();
+      return;
+    }
+
+    if (game.phase === 'voting') {
+      startHostVotingTimer();
+    } else {
+      stopHostTimers();
+    }
+
+    if (game.phase === 'playing') {
+      startHostGameTimer();
+    }
+
+    return () => {
+      stopHostTimers();
+    };
+  }, [game?.phase, game?.isHost, localRoomId, startHostVotingTimer, startHostGameTimer, stopHostTimers]);
+
+  const updateRoom = useCallback(
+    (roomId: string, updater: (current: DbRoom | null) => DbRoom | null | undefined) =>
+      db ? runTransaction(ref(db, roomPath(roomId)), updater) : Promise.resolve({} as never),
+    [db],
   );
 
   const createRoom = useCallback(
-    (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => {
+    async (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => {
+      if (!db) return;
       const normalizedMaxPlayers = normalizeMaxPlayers(maxPlayers);
-      const roomId = randomId();
+    const roomId = randomRoomId();
       const trimmedTitle = title.trim() || 'My Room';
-      // Add the new room to the list so it's visible in the lobby
-      setRooms((prev) => [
-        ...prev,
-        { id: roomId, title: trimmedTitle, visibility, playerCount: 1, maxPlayers: normalizedMaxPlayers },
-      ]);
-      enterRoom(roomId, trimmedTitle, visibility, true, normalizedMaxPlayers, playerName);
+      const normalizedPlayerName = sanitizePlayerName(playerName);
+      const playerId = localPlayerStorageId();
+      const payload: DbRoom = {
+        title: trimmedTitle,
+        visibility,
+        maxPlayers: normalizedMaxPlayers,
+        hostId: playerId,
+        phase: 'waiting',
+        winnerId: null,
+        votingTimeLeft: VOTING_SECONDS,
+        gameTimeLeft: PLAY_SECONDS,
+        players: {
+          [playerId]: {
+            name: normalizedPlayerName,
+            isOut: false,
+            isBot: false,
+            wordSlots: hiddenWordSlots(),
+          },
+        },
+        messages: {},
+        votes: {},
+      };
+      const roomsRef = ref(db, roomPath(roomId));
+      await set(roomsRef, payload);
+      await upsertUserProfile(playerId, normalizedPlayerName, roomId);
+      void setDisconnectCleanup(roomId, playerId);
+      void setRoomCleanupDisconnect(roomId);
+      setLocalRoomId(roomId);
+      setLocalPlayerId(playerId);
+      stopHostTimers();
     },
-    [enterRoom]
+    [db, stopHostTimers, upsertUserProfile, setDisconnectCleanup, setRoomCleanupDisconnect],
+  );
+
+  const addOrUpdatePlayerInRoom = useCallback(
+    async (roomId: string, playerName: string) => {
+      if (!db || !roomId) return false;
+      const playerId = localPlayerStorageId();
+      const normalizedName = sanitizePlayerName(playerName);
+      const roomRef = ref(db, roomPath(roomId));
+      const joinResult = await runTransaction(roomRef, (current: DbRoom | null) => {
+        if (!current) return current;
+        const players = current.players ?? {};
+        if (!players[playerId]) {
+          const currentCount = Object.keys(players).length;
+          if (currentCount >= current.maxPlayers) {
+            return;
+          }
+          players[playerId] = {
+            name: normalizedName,
+            isOut: false,
+            isBot: false,
+            wordSlots: hiddenWordSlots(),
+          };
+          current.players = players;
+          return current;
+        }
+        players[playerId] = {
+          ...players[playerId],
+          name: normalizedName,
+        };
+        current.players = players;
+        return current;
+      });
+      if (!joinResult.committed) return false;
+      await upsertUserProfile(playerId, normalizedName, roomId);
+      void setDisconnectCleanup(roomId, playerId);
+      setLocalRoomId(roomId);
+      setLocalPlayerId(playerId);
+      return true;
+    },
+    [db, setDisconnectCleanup, upsertUserProfile],
   );
 
   const joinRoom = useCallback(
-    (roomId: string, playerName: string) => {
-      const room = rooms.find((r) => r.id === roomId);
-      if (!room) return;
-      const maxPlayers = normalizeMaxPlayers(room.maxPlayers);
-      if (room.playerCount >= maxPlayers) return;
-      enterRoom(roomId, room?.title ?? `Room ${roomId}`, room?.visibility ?? 'public', false, maxPlayers, playerName);
+    async (roomId: string, playerName: string) => {
+      await addOrUpdatePlayerInRoom(roomId, playerName);
     },
-    [enterRoom, rooms]
+    [addOrUpdatePlayerInRoom],
   );
 
   const joinPrivateRoom = useCallback(
-    (roomId: string, playerName: string): 'ok' | 'not-found' | 'full' => {
-      const upper = roomId.trim().toUpperCase();
-      const room = rooms.find((r) => r.id === upper);
+    async (roomId: string, playerName: string): Promise<'ok' | 'not-found' | 'full'> => {
+      if (!db) return 'not-found';
+      const roomRef = ref(db, roomPath(roomId.toUpperCase()));
+      const snapshot = await get(roomRef);
+      if (!snapshot.exists()) return 'not-found';
+
+      const room = snapshot.val() as DbRoom | null;
       if (!room) return 'not-found';
-      if (room.playerCount >= room.maxPlayers) return 'full';
-      joinRoom(upper, playerName);
-      return 'ok';
+      if (Object.keys(room.players ?? {}).length >= room.maxPlayers) return 'full';
+
+      const joined = await addOrUpdatePlayerInRoom(roomId.toUpperCase(), playerName);
+      return joined ? 'ok' : 'full';
     },
-    [joinRoom, rooms]
+    [addOrUpdatePlayerInRoom, db],
   );
 
-  const startGame = useCallback(() => {
-    setGame((prev) => {
-      if (!prev || prev.phase !== 'waiting') return prev;
-      const isHost = prev.isHost;
-      if (!isHost) return prev;
-      if (prev.players.length < MIN_PLAYERS) return prev;
-      startVotingTimer();
-      return { ...prev, phase: 'voting', votingTimeLeft: VOTING_SECONDS };
-    });
-  }, [startVotingTimer]);
+  const startGame = useCallback(async () => {
+    if (!db || !localRoomId || !localPlayerId) return;
+    const roomRef = ref(db, roomPath(localRoomId));
+    await runTransaction(roomRef, (current: DbRoom | null) => {
+      if (!current) return current;
+      if (current.hostId !== localPlayerId) return current;
+      if (current.phase !== 'waiting') return current;
+      const playerIds = Object.keys(current.players ?? {});
+      if (playerIds.length < MIN_PLAYERS) return current;
 
-  const leaveRoom = useCallback(() => {
-    if (votingTimerRef.current) clearInterval(votingTimerRef.current);
-    if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-    botJoinTimersRef.current.forEach(clearTimeout);
-    if (botChatTimerRef.current) clearTimeout(botChatTimerRef.current);
+      const allAssigned: string[] = [];
+      const nextPlayers: Record<string, DbPlayer> = {};
+      Object.entries(current.players).forEach(([id, player]) => {
+        nextPlayers[id] = {
+          ...player,
+          wordSlots: buildWordSlots(allAssigned),
+        };
+      });
+      return {
+        ...current,
+        phase: 'voting',
+        votingTimeLeft: VOTING_SECONDS,
+        votes: {},
+        players: nextPlayers,
+      };
+    });
+  }, [db, localPlayerId, localRoomId]);
+
+  const leaveRoom = useCallback(async () => {
+    if (!db || !localRoomId || !localPlayerId) {
+      void clearDisconnectCleanup();
+      setGame(null);
+      setLocalRoomId(null);
+      return;
+    }
+
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        /* ignore */
+      }
       recognitionRef.current = null;
     }
+    await clearDisconnectCleanup();
+
+    await runTransaction(ref(db, roomPath(localRoomId)), (current: DbRoom | null) => {
+      if (!current) return current;
+      const players = { ...current.players };
+      const votes = { ...(current.votes ?? {}) };
+
+      if (!players[localPlayerId]) return current;
+      delete players[localPlayerId];
+      Object.keys(votes).forEach((targetId) => {
+        if (votes[targetId]?.[String(localPlayerId)]) {
+          delete votes[targetId][String(localPlayerId)];
+        }
+      });
+      delete votes[localPlayerId];
+
+      if (Object.keys(players).length === 0) {
+        return null;
+      }
+
+      const entries = Object.entries(players);
+      const [nextHostId, nextHost] = entries[0];
+      if (current.hostId === localPlayerId && nextHost) {
+        return {
+          ...current,
+          hostId: nextHostId,
+          players,
+          votes,
+        };
+      }
+
+      return {
+        ...current,
+        players,
+        votes,
+      };
+    });
+
+    stopHostTimers();
     setSttActive(false);
     setSttInterim('');
     setGame(null);
-  }, []);
+    setLocalRoomId(null);
+  }, [clearDisconnectCleanup, db, localPlayerId, localRoomId, stopHostTimers]);
 
-  // ---------------------------------------------------------------------------
-  // Voting
-  // ---------------------------------------------------------------------------
   const castVote = useCallback(
-    (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => {
-      setGame((prev) => {
-        if (!prev || prev.phase !== 'voting') return prev;
-        const newPlayers = prev.players.map((p) => {
-          if (p.id !== targetPlayerId) return p;
-          const newSlots = p.wordSlots.map((slot, si) => {
-            if (si !== slotIndex) return slot;
-            const newVotes = [...slot.votesByWord];
-            if (previousWordIndex !== undefined && previousWordIndex >= 0) {
-              newVotes[previousWordIndex] = Math.max(0, (newVotes[previousWordIndex] ?? 0) - 1);
-            }
-            newVotes[wordIndex] = (newVotes[wordIndex] ?? 0) + 1;
-            return { ...slot, votesByWord: newVotes };
-          });
-          return { ...p, wordSlots: newSlots };
-        });
-        return { ...prev, players: newPlayers };
-      });
+    async (
+      targetPlayerId: string,
+      slotIndex: number,
+      wordIndex: number,
+    ) => {
+      if (!db || !localRoomId || !localPlayerId || !game || game.phase !== 'voting') return;
+      if (!Number.isInteger(wordIndex) || wordIndex < 0 || wordIndex >= CANDIDATES_PER_SLOT) return;
+      if (!Number.isInteger(slotIndex) || slotIndex < 0) return;
+      if (targetPlayerId === localPlayerId) return;
+      const voteRef = ref(
+        db,
+        `${roomPath(localRoomId)}/votes/${targetPlayerId}/${slotIndex}/${localPlayerId}`,
+      );
+      await set(voteRef, wordIndex);
     },
-    []
+    [db, game, localPlayerId, localRoomId],
   );
 
-  // ---------------------------------------------------------------------------
-  // Send message
-  // ---------------------------------------------------------------------------
-  const sendMessage = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setGame((prev) => {
-      if (!prev || prev.phase !== 'playing') return prev;
-      return applyMessage(prev, prev.localPlayerId, trimmed);
-    });
-  }, []);
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!db || !localRoomId || !localPlayerId || !game || game.phase !== 'playing') return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
 
-  // ---------------------------------------------------------------------------
-  // STT
-  // ---------------------------------------------------------------------------
+      const localPlayer = game.players.find((p) => p.id === localPlayerId);
+      if (!localPlayer || localPlayer.isOut) return;
+
+      const roomMessagesRef = ref(db, `${roomPath(localRoomId)}/messages`);
+      const messageRef = push(roomMessagesRef);
+      if (!messageRef.key) return;
+      setSttError(null);
+
+      const triggeredWord = findTriggeredWordFromState(game.players, localPlayerId, trimmed);
+      const message: DsiChatMessage = {
+        id: messageRef.key,
+        playerId: localPlayerId,
+        playerName: localPlayer.name,
+        text: trimmed,
+        timestamp: Date.now(),
+        ...(triggeredWord ? { triggeredWord } : {}),
+      };
+
+      try {
+        await set(messageRef, message);
+      } catch (error) {
+        console.error('Failed to send message', error);
+        setSttError('Failed to send message. Check your Firebase DB permissions.');
+        return;
+      }
+
+      if (!triggeredWord) return;
+
+      const result = await runTransaction(ref(db, roomPath(localRoomId)), (current: DbRoom | null) => {
+        if (!current || current.phase !== 'playing') return current;
+        const currentPlayer = current.players?.[localPlayerId];
+        if (!currentPlayer || currentPlayer.isOut) return current;
+
+        const nextPlayers: Record<string, DbPlayer> = { ...(current.players ?? {}) };
+        nextPlayers[localPlayerId] = { ...currentPlayer, isOut: true };
+
+        const activePlayerIds = Object.entries(nextPlayers).filter(([, p]) => !p.isOut).map(([id]) => id);
+        if (activePlayerIds.length <= 1) {
+          return {
+            ...current,
+            players: nextPlayers,
+            phase: 'finished',
+            gameTimeLeft: 0,
+            winnerId: activePlayerIds[0] ?? null,
+          };
+        }
+
+        return {
+          ...current,
+          players: nextPlayers,
+        };
+      });
+
+      if (!result.committed) {
+        console.error('Failed to update player status for trigger message', result);
+      }
+    },
+    [db, localPlayerId, localRoomId, game],
+  );
+
   const stopStt = useCallback(() => {
     if (recognitionRef.current) {
-      // stop() may throw if the recognition has already ended; safe to ignore.
-      try { recognitionRef.current.stop(); } catch { /* already stopped */ }
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        /* already stopped */
+      }
       recognitionRef.current = null;
     }
     setSttActive(false);
@@ -543,7 +1053,7 @@ export function useDontSayIt(): UseDontSayItReturn {
   }, []);
 
   const startStt = useCallback(() => {
-    if (!sttSupported) return;
+    if (!game || !sttSupported || !db) return;
     const win = window as WindowWithSpeech;
     const Ctor = win.SpeechRecognition ?? win.webkitSpeechRecognition;
     if (!Ctor) return;
@@ -565,10 +1075,7 @@ export function useDontSayIt(): UseDontSayItReturn {
       setSttInterim(interim);
       if (finalText.trim()) {
         setSttInterim('');
-        setGame((prev) => {
-          if (!prev || prev.phase !== 'playing') return prev;
-          return applyMessage(prev, prev.localPlayerId, finalText.trim());
-        });
+        void sendMessage(finalText.trim());
       }
     };
 
@@ -577,32 +1084,43 @@ export function useDontSayIt(): UseDontSayItReturn {
       stopStt();
     };
     recognition.onend = () => {
-      setSttActive((active) => { if (active) recognition.start(); return active; });
+      setSttActive((active) => {
+        if (active) {
+          recognition.start();
+        }
+        return active;
+      });
     };
 
     recognitionRef.current = recognition;
     recognition.start();
     setSttActive(true);
-  }, [sttSupported, stopStt]);
+  }, [db, game, sendMessage, stopStt, sttSupported]);
 
   const toggleStt = useCallback(() => {
-    if (sttActive) stopStt(); else startStt();
+    if (sttActive) stopStt();
+    else startStt();
   }, [sttActive, startStt, stopStt]);
 
   useEffect(() => {
-    if (game?.phase === 'playing' && !sttActive && sttSupported) {
-      startStt();
-    } else if (game?.phase !== 'playing' && sttActive) {
+    if (game?.phase !== 'playing' || !sttSupported) {
       stopStt();
+      return;
     }
+    if (!sttActive) {
+      startStt();
+    }
+    return () => {
+      stopStt();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.phase, game?.localPlayerId, sttActive, sttSupported, startStt, stopStt]);
+  }, [game?.phase, sttSupported]);
 
   useEffect(() => {
     if (game?.phase === 'finished') {
-      setRooms((prev) => prev.filter((room) => room.id !== game.roomId));
+      void archiveFinishedGame(game);
     }
-  }, [game?.phase, game?.roomId]);
+  }, [game?.phase, game?.roomId, archiveFinishedGame]);
 
   return {
     rooms,

@@ -12,6 +12,7 @@
   "dependencies": {
     "@glowing-potato/theme": "workspace:*",
     "@glowing-potato/ui": "workspace:*",
+    "firebase": "^11.9.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

@@ -51,6 +51,7 @@ export interface DsiGameState {
   roomId: string;
   roomTitle: string;
   roomVisibility: RoomVisibility;
+  hostId: string;
   localPlayerId: string;
   isHost: boolean;
   maxPlayers: number;
