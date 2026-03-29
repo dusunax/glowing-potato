@@ -4,21 +4,16 @@
 import { useState, useEffect, useRef } from 'react';
 import type { DsiRoomSummary, RoomVisibility } from '../types';
 import { Button, Card, CardHeader, CardBody, CardTitle, CardDescription } from '@glowing-potato/ui';
-import { UserEditPopup } from '../../../components/UserEditPopup';
-import type { NicknameUpdateResult } from '../../../hooks/useAuth';
 
 interface RoomLobbyProps {
   rooms: DsiRoomSummary[];
   onJoinRoom: (roomId: string, playerName: string) => void;
-  onJoinPrivate: (roomId: string, playerName: string) => 'ok' | 'not-found' | 'full' | Promise<'ok' | 'not-found' | 'full'>;
+  onJoinPrivate: (roomId: string, playerName: string) => 'ok' | 'not-found' | 'full';
   onCreateRoom: (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => void;
   onBack: () => void;
-  nickname?: string;
-  onSignOut?: () => void;
-  onUpdateNickname?: (nickname: string) => Promise<NicknameUpdateResult>;
 }
 
-export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBack, nickname, onSignOut, onUpdateNickname }: RoomLobbyProps) {
+export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBack }: RoomLobbyProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [showJoinPrivate, setShowJoinPrivate] = useState(false);
   const [showNicknamePopup, setShowNicknamePopup] = useState(false);
@@ -26,7 +21,6 @@ export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBa
   const [newVisibility, setNewVisibility] = useState<RoomVisibility>('public');
   const [maxPlayers, setMaxPlayers] = useState<number>(4);
   const [playerName, setPlayerName] = useState(() => {
-    if (nickname) return nickname;
     if (typeof window === 'undefined') return 'You';
     return localStorage.getItem('dsi-player-name') || 'You';
   });
@@ -49,12 +43,6 @@ export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBa
       joinPrivateInputRef.current?.focus();
     }
   }, [showJoinPrivate]);
-
-  useEffect(() => {
-    if (nickname) {
-      setPlayerName(nickname);
-    }
-  }, [nickname]);
 
   useEffect(() => {
     if (showNicknamePopup) {
@@ -135,26 +123,15 @@ export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBa
           <Button variant="ghost" size="sm" onClick={onBack}>
             ← Lobby
           </Button>
-          <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setShowNicknamePopup(true)}
-            aria-label="Edit nickname"
+            aria-label="닉네임 설정"
             className="w-8 h-8 rounded-full border border-gp-accent/30 text-gp-mint/70 hover:text-gp-mint hover:border-gp-accent/60 hover:bg-gp-accent/10 flex items-center justify-center transition-colors"
             title={`Nickname: ${playerName || 'You'}`}
           >
             ✎
           </button>
-          {nickname && onSignOut && (
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="px-2 py-1.5 rounded-lg border border-gp-accent/20 text-gp-mint/50 hover:text-gp-mint/80 hover:border-gp-accent/40 transition-colors text-xs"
-            >
-              Sign out
-            </button>
-          )}
-          </div>
         </div>
         <div className="text-center">
           <p className="text-xs font-semibold tracking-widest text-gp-accent uppercase mb-1">
@@ -178,14 +155,7 @@ export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBa
           </Button>
         </div>
 
-        {showNicknamePopup && nickname && onUpdateNickname && (
-          <UserEditPopup
-            currentNickname={nickname}
-            onSave={onUpdateNickname}
-            onClose={closeNicknamePopup}
-          />
-        )}
-        {showNicknamePopup && !nickname && (
+        {showNicknamePopup && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-sm p-4"
             onClick={closeNicknamePopup}
