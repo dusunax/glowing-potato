@@ -15,7 +15,8 @@ interface GameLobbyProps {
 }
 
 export function GameLobby({ onSelectGame }: GameLobbyProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const mainGameIndex = MINI_GAMES.findIndex((game) => game.id === 'dont-say-it');
+  const [activeIndex, setActiveIndex] = useState(mainGameIndex >= 0 ? mainGameIndex : 0);
   const [spinning, setSpinning] = useState(false);
   const spinIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -247,4 +248,3 @@ function GameCard({ game, active = false }: GameCardProps) {
     </div>
   );
 }
-

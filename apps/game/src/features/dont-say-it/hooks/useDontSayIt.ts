@@ -11,7 +11,7 @@ import type {
   DsiWordSlot,
   GamePhase,
   RoomVisibility,
-} from '../types/dont-say-it';
+} from '../types';
 import { pickWords } from '../data/words';
 
 // ---------------------------------------------------------------------------
@@ -61,8 +61,9 @@ interface WindowWithSpeech extends Window {
 // ---------------------------------------------------------------------------
 
 const CANDIDATES_PER_SLOT = 3;
-const SLOTS_PER_PLAYER = 3;
+const SLOTS_PER_PLAYER = 1;
 const VOTING_SECONDS = 10;
+const PLAY_SECONDS = 60;
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 4;
 
@@ -198,6 +199,11 @@ function applyMessage(prev: DsiGameState, speakerId: string, text: string): DsiG
   return { ...prev, messages: [...prev.messages, msg], players: newPlayers, phase: newPhase, winnerId: newWinnerId };
 }
 
+function sanitizePlayerName(name: string): string {
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? trimmed : 'You';
+}
+
 // ---------------------------------------------------------------------------
 // Initial lobby rooms
 // ---------------------------------------------------------------------------
@@ -214,15 +220,14 @@ const INITIAL_ROOMS: DsiRoomSummary[] = [
 
 export interface UseDontSayItReturn {
   rooms: DsiRoomSummary[];
-  createRoom: (title: string, visibility: RoomVisibility) => void;
-  joinRoom: (roomId: string) => void;
-  joinPrivateRoom: (roomId: string) => 'ok' | 'not-found';
+  createRoom: (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => void;
+  joinRoom: (roomId: string, playerName: string) => void;
+  joinPrivateRoom: (roomId: string, playerName: string) => 'ok' | 'not-found' | 'full';
   leaveRoom: () => void;
+  startGame: () => void;
   game: DsiGameState | null;
   sendMessage: (text: string) => void;
   castVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
-  toggleReady: () => void;
-  startGame: () => void;
   sttSupported: boolean;
   sttActive: boolean;
   sttError: string | null;
@@ -247,12 +252,20 @@ export function useDontSayIt(): UseDontSayItReturn {
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
   const votingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const botJoinTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const botChatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function normalizeMaxPlayers(value: number): number {
+    const maxPlayers = Math.floor(Number(value));
+    if (!Number.isFinite(maxPlayers)) return MAX_PLAYERS;
+    return Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, maxPlayers));
+  }
 
   useEffect(() => {
     return () => {
       if (votingTimerRef.current) clearInterval(votingTimerRef.current);
+      if (gameTimerRef.current) clearInterval(gameTimerRef.current);
       botJoinTimersRef.current.forEach(clearTimeout);
       if (botChatTimerRef.current) clearTimeout(botChatTimerRef.current);
       if (recognitionRef.current) {
@@ -275,9 +288,39 @@ export function useDontSayIt(): UseDontSayItReturn {
         const newTime = prev.votingTimeLeft - 1;
         if (newTime <= 0) {
           clearInterval(votingTimerRef.current!);
-          return { ...prev, votingTimeLeft: 0, phase: 'playing', players: prev.players.map(resolveSlots) };
+          return {
+            ...prev,
+            votingTimeLeft: 0,
+            gameTimeLeft: PLAY_SECONDS,
+            phase: 'playing',
+            players: prev.players.map(resolveSlots),
+          };
         }
         return { ...prev, votingTimeLeft: newTime };
+      });
+    }, 1000);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Playing timer
+  // ---------------------------------------------------------------------------
+  const startGameTimer = useCallback(() => {
+    if (gameTimerRef.current) clearInterval(gameTimerRef.current);
+    gameTimerRef.current = setInterval(() => {
+      setGame((prev) => {
+        if (!prev || prev.phase !== 'playing') {
+          clearInterval(gameTimerRef.current!);
+          return prev;
+        }
+
+        const nextTime = prev.gameTimeLeft - 1;
+        if (nextTime <= 0) {
+          clearInterval(gameTimerRef.current!);
+          const alive = getActivePlayers(prev.players);
+          const winnerId = alive.length === 1 ? alive[0].id : null;
+          return { ...prev, gameTimeLeft: 0, phase: 'finished', winnerId };
+        }
+        return { ...prev, gameTimeLeft: nextTime };
       });
     }, 1000);
   }, []);
@@ -303,16 +346,19 @@ export function useDontSayIt(): UseDontSayItReturn {
   useEffect(() => {
     if (game?.phase === 'playing') {
       scheduleBotChat();
+      startGameTimer();
     } else {
       if (botChatTimerRef.current) clearTimeout(botChatTimerRef.current);
+      if (gameTimerRef.current) clearInterval(gameTimerRef.current);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.phase]);
+  }, [game?.phase, startGameTimer]);
 
   // ---------------------------------------------------------------------------
   // Bot joins
   // ---------------------------------------------------------------------------
-  function scheduleBotJoins(allAssigned: string[]) {
+  function scheduleBotJoins(allAssigned: string[], maxPlayers = MAX_PLAYERS) {
+    const normalizedMaxPlayers = normalizeMaxPlayers(maxPlayers);
     const usedBotNames = new Set<string>();
     botJoinTimersRef.current.forEach(clearTimeout);
     botJoinTimersRef.current = [];
@@ -320,7 +366,7 @@ export function useDontSayIt(): UseDontSayItReturn {
     function addNextBot() {
       setGame((prev) => {
         if (!prev || prev.phase !== 'waiting') return prev;
-        if (prev.players.length >= MAX_PLAYERS) return prev;
+        if (prev.players.length >= normalizedMaxPlayers) return prev;
 
         const availableNames = BOT_NAMES.filter((n) => !usedBotNames.has(n));
         if (availableNames.length === 0) return prev;
@@ -331,9 +377,9 @@ export function useDontSayIt(): UseDontSayItReturn {
         const botSlots = buildWordSlots([...allAssigned]);
         botSlots.forEach((s) => allAssigned.push(...s.candidates));
 
-        // Bots are always ready immediately on joining.
-        const bot: DsiPlayer = { id: uid(), name, wordSlots: botSlots, isOut: false, isBot: true, isReady: true };
-        return { ...prev, players: [...prev.players, bot] };
+        const bot: DsiPlayer = { id: uid(), name, wordSlots: botSlots, isOut: false, isBot: true };
+        const newPlayers = [...prev.players, bot];
+        return { ...prev, players: newPlayers };
       });
     }
 
@@ -344,69 +390,96 @@ export function useDontSayIt(): UseDontSayItReturn {
   // Room enter helper
   // ---------------------------------------------------------------------------
   const enterRoom = useCallback(
-    (roomId: string, title: string, visibility: RoomVisibility, isHost: boolean) => {
+    (
+      roomId: string,
+      title: string,
+      visibility: RoomVisibility,
+      isHost: boolean,
+      maxPlayers = MAX_PLAYERS,
+      playerName = 'You',
+    ) => {
+      const normalizedMaxPlayers = normalizeMaxPlayers(maxPlayers);
       const localId = uid();
       const allAssigned: string[] = [];
       const localPlayer: DsiPlayer = {
         id: localId,
-        name: 'You',
+        name: sanitizePlayerName(playerName),
         wordSlots: buildWordSlots(allAssigned),
         isOut: false,
         isBot: false,
-        isReady: false,
       };
       setGame({
         phase: 'waiting',
         roomId,
         roomTitle: title,
         roomVisibility: visibility,
-        isHost,
         localPlayerId: localId,
+        isHost,
+        maxPlayers: normalizedMaxPlayers,
         players: [localPlayer],
         messages: [],
+        gameTimeLeft: PLAY_SECONDS,
         votingTimeLeft: VOTING_SECONDS,
         winnerId: null,
       });
-      scheduleBotJoins(allAssigned);
+      scheduleBotJoins(allAssigned, normalizedMaxPlayers);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [startVotingTimer]
   );
 
   const createRoom = useCallback(
-    (title: string, visibility: RoomVisibility) => {
+    (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => {
+      const normalizedMaxPlayers = normalizeMaxPlayers(maxPlayers);
       const roomId = randomId();
       const trimmedTitle = title.trim() || 'My Room';
       // Add the new room to the list so it's visible in the lobby
       setRooms((prev) => [
         ...prev,
-        { id: roomId, title: trimmedTitle, visibility, playerCount: 1, maxPlayers: MAX_PLAYERS },
+        { id: roomId, title: trimmedTitle, visibility, playerCount: 1, maxPlayers: normalizedMaxPlayers },
       ]);
-      enterRoom(roomId, trimmedTitle, visibility, true);
+      enterRoom(roomId, trimmedTitle, visibility, true, normalizedMaxPlayers, playerName);
     },
     [enterRoom]
   );
 
   const joinRoom = useCallback(
-    (roomId: string) => {
+    (roomId: string, playerName: string) => {
       const room = rooms.find((r) => r.id === roomId);
-      enterRoom(roomId, room?.title ?? `Room ${roomId}`, room?.visibility ?? 'public', false);
+      if (!room) return;
+      const maxPlayers = normalizeMaxPlayers(room.maxPlayers);
+      if (room.playerCount >= maxPlayers) return;
+      enterRoom(roomId, room?.title ?? `Room ${roomId}`, room?.visibility ?? 'public', false, maxPlayers, playerName);
     },
     [enterRoom, rooms]
   );
 
   const joinPrivateRoom = useCallback(
-    (roomId: string): 'ok' | 'not-found' => {
+    (roomId: string, playerName: string): 'ok' | 'not-found' | 'full' => {
       const upper = roomId.trim().toUpperCase();
-      if (!rooms.some((r) => r.id === upper)) return 'not-found';
-      joinRoom(upper);
+      const room = rooms.find((r) => r.id === upper);
+      if (!room) return 'not-found';
+      if (room.playerCount >= room.maxPlayers) return 'full';
+      joinRoom(upper, playerName);
       return 'ok';
     },
     [joinRoom, rooms]
   );
 
+  const startGame = useCallback(() => {
+    setGame((prev) => {
+      if (!prev || prev.phase !== 'waiting') return prev;
+      const isHost = prev.isHost;
+      if (!isHost) return prev;
+      if (prev.players.length < MIN_PLAYERS) return prev;
+      startVotingTimer();
+      return { ...prev, phase: 'voting', votingTimeLeft: VOTING_SECONDS };
+    });
+  }, [startVotingTimer]);
+
   const leaveRoom = useCallback(() => {
     if (votingTimerRef.current) clearInterval(votingTimerRef.current);
+    if (gameTimerRef.current) clearInterval(gameTimerRef.current);
     botJoinTimersRef.current.forEach(clearTimeout);
     if (botChatTimerRef.current) clearTimeout(botChatTimerRef.current);
     if (recognitionRef.current) {
@@ -452,36 +525,6 @@ export function useDontSayIt(): UseDontSayItReturn {
       return applyMessage(prev, prev.localPlayerId, trimmed);
     });
   }, []);
-
-  // ---------------------------------------------------------------------------
-  // Ready / Start (waiting phase)
-  // ---------------------------------------------------------------------------
-
-  /** Toggle the local player's ready status. */
-  const toggleReady = useCallback(() => {
-    setGame((prev) => {
-      if (!prev || prev.phase !== 'waiting') return prev;
-      const newPlayers = prev.players.map((p) =>
-        p.id === prev.localPlayerId ? { ...p, isReady: !p.isReady } : p
-      );
-      return { ...prev, players: newPlayers };
-    });
-  }, []);
-
-  /**
-   * Host-only: start the game.
-   * Allowed only when ≥2 players are present and every player is ready.
-   */
-  const startGame = useCallback(() => {
-    setGame((prev) => {
-      if (!prev || prev.phase !== 'waiting') return prev;
-      const isHost = prev.isHost || prev.localPlayerId === prev.players[0]?.id;
-      if (!isHost) return prev;
-      if (prev.players.length < MIN_PLAYERS) return prev;
-      startVotingTimer();
-      return { ...prev, phase: 'voting', votingTimeLeft: VOTING_SECONDS };
-    });
-  }, [startVotingTimer]);
 
   // ---------------------------------------------------------------------------
   // STT
@@ -552,5 +595,26 @@ export function useDontSayIt(): UseDontSayItReturn {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game?.phase, game?.localPlayerId, sttActive, sttSupported, startStt, stopStt]);
 
-  return { rooms, createRoom, joinRoom, joinPrivateRoom, leaveRoom, game, sendMessage, castVote, toggleReady, startGame, sttSupported, sttActive, sttError, toggleStt, sttInterim };
+  useEffect(() => {
+    if (game?.phase === 'finished') {
+      setRooms((prev) => prev.filter((room) => room.id !== game.roomId));
+    }
+  }, [game?.phase, game?.roomId]);
+
+  return {
+    rooms,
+    createRoom,
+    joinRoom,
+    joinPrivateRoom,
+    leaveRoom,
+    startGame,
+    game,
+    sendMessage,
+    castVote,
+    sttSupported,
+    sttActive,
+    sttError,
+    toggleStt,
+    sttInterim,
+  };
 }

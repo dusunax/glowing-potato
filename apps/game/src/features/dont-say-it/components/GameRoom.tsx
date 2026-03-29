@@ -3,16 +3,15 @@
 // and finished (winner announcement) phases.
 
 import { useState, useRef, useEffect } from 'react';
-import type { DsiGameState, DsiPlayer } from '../../types/dont-say-it';
+import type { DsiGameState, DsiPlayer, DsiChatMessage } from '../types';
 import { Button } from '@glowing-potato/ui';
 
 interface GameRoomProps {
   game: DsiGameState;
   onLeave: () => void;
   onSendMessage: (text: string) => void;
-  onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
-  onToggleReady: () => void;
   onStartGame: () => void;
+  onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number) => void;
   sttSupported: boolean;
   sttActive: boolean;
   sttError: string | null;
@@ -24,98 +23,111 @@ export function GameRoom({
   game,
   onLeave,
   onSendMessage,
-  onCastVote,
-  onToggleReady,
   onStartGame,
+  onCastVote,
   sttSupported,
   sttActive,
   sttError,
   onToggleStt,
   sttInterim,
 }: GameRoomProps) {
+  const privateRoomCode = game.roomVisibility === 'private' ? game.roomId : null;
+  const [copied, setCopied] = useState(false);
+  const [showReplayModal, setShowReplayModal] = useState(false);
+
+  function handleCopyRoomCode() {
+    if (!privateRoomCode) return;
+    navigator.clipboard.writeText(privateRoomCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }).catch(() => {
+      window.alert(`Room code: ${privateRoomCode}`);
+    });
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-gp-bg">
-      {/* Top bar */}
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-gp-accent/20 bg-gp-surface/30">
-        <Button variant="ghost" size="sm" onClick={onLeave}>← Leave</Button>
-        <div className="flex-1 min-w-0">
-          <span className="text-gp-mint font-semibold text-sm truncate block">{game.roomTitle}</span>
-          <span className="text-gp-mint/50 text-xs">
+    <div className="h-screen min-h-screen max-h-screen flex flex-col overflow-hidden bg-gp-bg">
+      <>
+        {/* Top bar */}
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-gp-accent/20 bg-gp-surface/30">
+          {game.phase !== 'playing' && (
+            <Button variant="ghost" size="sm" onClick={onLeave}>← Leave</Button>
+          )}
+          <div className="flex-1 min-w-0">
+            <span className="text-gp-mint font-semibold text-sm truncate block">{game.roomTitle}</span>
+          </div>
+          <span className="text-gp-mint/60 text-xs">
             {game.roomVisibility === 'private' ? `🔒 ${game.roomId}` : `🌐 Room #${game.roomId}`}
           </span>
-        </div>
-        <PhaseTag phase={game.phase} />
-      </header>
+          {privateRoomCode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyRoomCode}
+              title="Copy private room code"
+              className="h-7 px-3 gap-1 border-gp-mint/50 text-gp-mint hover:bg-gp-accent/20"
+            >
+              📋 {copied ? 'Copied!' : 'Copy room code'}
+            </Button>
+          )}
+        </header>
 
-      {/* Phase views */}
-      {game.phase === 'waiting' && (
-        <WaitingView
-          game={game}
-          onToggleReady={onToggleReady}
-          onStartGame={onStartGame}
-        />
+        {/* Phase views */}
+        {game.phase === 'waiting' && <WaitingView game={game} onStartGame={onStartGame} />}
+        {game.phase === 'voting' && <VotingView game={game} onCastVote={onCastVote} />}
+        {game.phase === 'playing' && (
+          <PlayingView
+            game={game}
+            onSendMessage={onSendMessage}
+            sttSupported={sttSupported}
+            sttActive={sttActive}
+            sttError={sttError}
+            onToggleStt={onToggleStt}
+            sttInterim={sttInterim}
+            onLeave={onLeave}
+          />
+        )}
+        {game.phase === 'finished' && (
+          <FinishedView game={game} onLeave={onLeave} onShowReplay={() => setShowReplayModal(true)} />
+        )}
+      </>
+      {game.phase === 'finished' && showReplayModal && (
+        <ChatReplayPage game={game} onClose={() => setShowReplayModal(false)} />
       )}
-      {game.phase === 'voting' && <VotingView game={game} onCastVote={onCastVote} />}
-      {game.phase === 'playing' && (
-        <PlayingView
-          game={game}
-          onSendMessage={onSendMessage}
-          sttSupported={sttSupported}
-          sttActive={sttActive}
-          sttError={sttError}
-          onToggleStt={onToggleStt}
-          sttInterim={sttInterim}
-        />
-      )}
-      {game.phase === 'finished' && <FinishedView game={game} onLeave={onLeave} />}
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Phase tag
-// ---------------------------------------------------------------------------
-
-function PhaseTag({ phase }: { phase: DsiGameState['phase'] }) {
-  const map: Record<DsiGameState['phase'], { label: string; cls: string }> = {
-    waiting: { label: '⏳ Waiting', cls: 'text-gp-mint/60' },
-    voting:  { label: '🗳️ Voting',  cls: 'text-yellow-400' },
-    playing: { label: '🎮 Playing', cls: 'text-green-400' },
-    finished:{ label: '🏆 Finished',cls: 'text-gp-accent' },
-  };
-  const { label, cls } = map[phase];
-  return <span className={`text-xs font-semibold ${cls}`}>{label}</span>;
 }
 
 // ---------------------------------------------------------------------------
 // Waiting view
 // ---------------------------------------------------------------------------
 
-interface WaitingViewProps {
-  game: DsiGameState;
-  onToggleReady: () => void;
-  onStartGame: () => void;
-}
-
-function WaitingView({ game, onToggleReady, onStartGame }: WaitingViewProps) {
-  const isHost = game.isHost || game.localPlayerId === game.players[0]?.id;
-  const localPlayer = game.players.find((p) => p.id === game.localPlayerId)!;
+function WaitingView({ game, onStartGame }: { game: DsiGameState; onStartGame: () => void }) {
+  const isHost = game.isHost;
   const canStart = isHost && game.players.length >= 2;
+  const maxPlayers = game.maxPlayers || 4;
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
+    <div className="h-full min-h-0 flex-1 flex flex-col items-center justify-center gap-6 p-6 overflow-y-auto gp-scrollbar">
       <div className="text-5xl animate-pulse">⏳</div>
       <div className="text-center">
         <p className="text-gp-mint font-semibold text-lg">Waiting for players…</p>
         <p className="text-gp-mint/50 text-sm mt-1">
-          {game.players.length} / 4 players
-          {isHost
-            ? ' — press Start when everyone is ready'
-            : ' — wait for the host to start'}
+          {game.players.length} / {maxPlayers} — need at least 2 to start
         </p>
       </div>
-
-      {/* Player list with ready badges */}
+      {isHost && (
+        <Button
+          variant={canStart ? 'primary' : 'secondary'}
+          size="md"
+          onClick={onStartGame}
+          disabled={!canStart}
+        >
+          {canStart ? '▶ Start Game' : 'Need at least 2 players'}
+        </Button>
+      )}
+      {!isHost && <p className="text-gp-mint/50 text-xs">Waiting for the host to start.</p>}
+      {/* Player list */}
       <div className="w-full max-w-xs space-y-2">
         {game.players.map((p) => (
           <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-gp-surface/50 border border-gp-accent/20">
@@ -123,60 +135,20 @@ function WaitingView({ game, onToggleReady, onStartGame }: WaitingViewProps) {
             <span className="text-gp-mint text-sm font-medium flex-1">
               {p.id === game.localPlayerId ? `${p.name} (you)` : p.name}
             </span>
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-              p.isReady
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                : 'bg-gp-accent/10 text-gp-mint/40 border border-gp-accent/20'
-            }`}>
-              {p.isReady ? '✓ Ready' : 'Not ready'}
-            </span>
+            {game.isHost && p.id === game.localPlayerId && (
+              <span className="text-sm" title="Room creator">
+                👑
+              </span>
+            )}
           </div>
         ))}
         {/* Empty slots */}
-        {Array.from({ length: Math.max(0, 2 - game.players.length) }).map((_, i) => (
+        {Array.from({ length: Math.max(0, maxPlayers - game.players.length) }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-gp-surface/20 border border-dashed border-gp-accent/20">
             <span className="text-lg opacity-30">👤</span>
             <span className="text-gp-mint/30 text-sm">Waiting for player…</span>
           </div>
         ))}
-      </div>
-
-      {/* Actions */}
-      <div className="flex flex-col items-center gap-3 w-full max-w-xs">
-        {/* Ready toggle — always visible for the local human player */}
-        <Button
-          variant={localPlayer.isReady ? 'secondary' : 'primary'}
-          size="lg"
-          onClick={onToggleReady}
-          className="w-full"
-        >
-          {localPlayer.isReady ? '↩ Cancel Ready' : '✓ Ready'}
-        </Button>
-
-        {/* Start button — only visible to the host */}
-        {isHost && (
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={onStartGame}
-            disabled={!canStart}
-            className="w-full"
-            title={!canStart ? 'Need at least 2 players to start' : undefined}
-          >
-            ▶ Start Game
-          </Button>
-        )}
-
-        {!isHost && game.players.length >= 2 && (
-          <p className="text-gp-mint/40 text-xs text-center">
-            Waiting for the host to start.
-          </p>
-        )}
-        {game.players.length < 2 && (
-          <p className="text-gp-mint/40 text-xs text-center">
-            Need at least 2 players to start.
-          </p>
-        )}
       </div>
     </div>
   );
@@ -202,7 +174,7 @@ function VotingView({ game, onCastVote }: VotingViewProps) {
   function handleVote(player: DsiPlayer, slotIdx: number, wordIdx: number) {
     if (player.id === game.localPlayerId) return; // can't vote on own words
     const key = voteKey(player.id, slotIdx);
-    if (myVotes[key] === wordIdx) return; // already voted for this
+    if (myVotes[key] !== undefined) return; // one pick only per opponent slot (3 options total)
     setMyVotes((prev) => ({ ...prev, [key]: wordIdx }));
     onCastVote(player.id, slotIdx, wordIdx);
   }
@@ -211,13 +183,13 @@ function VotingView({ game, onCastVote }: VotingViewProps) {
   const localPlayer = game.players.find((p) => p.id === game.localPlayerId)!;
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-5">
+    <div className="h-full min-h-0 flex-1 overflow-y-auto p-4 space-y-5 gp-scrollbar">
       {/* Countdown */}
       <div className="text-center py-2">
         <p className="text-gp-mint/70 text-xs uppercase tracking-widest mb-1">Voting closes in</p>
         <p className="text-4xl font-bold text-yellow-400">{game.votingTimeLeft}s</p>
         <p className="text-gp-mint/50 text-xs mt-1">
-          Vote to choose which forbidden words the other players get!
+          Vote for each opponent's single forbidden word.
         </p>
       </div>
 
@@ -249,20 +221,24 @@ function VotingView({ game, onCastVote }: VotingViewProps) {
           <div className="space-y-3">
             {player.wordSlots.map((slot, si) => (
               <div key={si}>
-                <p className="text-gp-mint/40 text-xs mb-1">Slot {si + 1}</p>
+                <p className="text-gp-mint/40 text-xs mb-1">Forbidden word</p>
                 <div className="flex gap-2">
                   {slot.candidates.map((word, wi) => {
                     const key = voteKey(player.id, si);
                     const isMyVote = myVotes[key] === wi;
+                    const hasVoted = myVotes[key] !== undefined;
                     const totalVotes = slot.votesByWord.reduce((a, b) => a + b, 0);
                     const votePct = totalVotes > 0 ? Math.round((slot.votesByWord[wi] / totalVotes) * 100) : 0;
                     return (
                       <button
                         key={wi}
                         onClick={() => handleVote(player, si, wi)}
+                        disabled={hasVoted}
                         className={`flex-1 py-2 px-1 rounded-lg border text-xs font-medium transition-all ${
                           isMyVote
                             ? 'bg-gp-accent/30 border-gp-accent text-gp-mint'
+                            : hasVoted
+                              ? 'bg-gp-bg/30 border-gp-accent/10 text-gp-mint/30 cursor-not-allowed'
                             : 'bg-gp-bg/50 border-gp-accent/20 text-gp-mint/70 hover:border-gp-accent/50 hover:text-gp-mint'
                         }`}
                       >
@@ -315,17 +291,28 @@ interface PlayingViewProps {
   sttError: string | null;
   onToggleStt: () => void;
   sttInterim: string;
+  onLeave: () => void;
 }
 
-function PlayingView({ game, onSendMessage, sttSupported, sttActive, sttError, onToggleStt, sttInterim }: PlayingViewProps) {
+function PlayingView({
+  game,
+  onSendMessage,
+  sttSupported,
+  sttActive,
+  sttError,
+  onToggleStt,
+  sttInterim,
+  onLeave,
+}: PlayingViewProps) {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   const localPlayer = game.players.find((p) => p.id === game.localPlayerId)!;
   const isOut = localPlayer.isOut;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [game.messages]);
+  }, [game.messages, sttInterim]);
 
   function handleSend() {
     const text = inputText.trim();
@@ -334,10 +321,18 @@ function PlayingView({ game, onSendMessage, sttSupported, sttActive, sttError, o
     setInputText('');
   }
 
+  function handleQuit() {
+    setShowQuitConfirm(true);
+  }
+
+  function confirmQuit() {
+    onLeave();
+  }
+
   const activePlrs = game.players.filter((p) => !p.isOut);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 flex-1 flex flex-col overflow-hidden">
       {/* Players bar */}
       <div className="flex gap-2 px-4 py-2 overflow-x-auto border-b border-gp-accent/20 bg-gp-surface/20">
         {game.players.map((p) => (
@@ -348,8 +343,15 @@ function PlayingView({ game, onSendMessage, sttSupported, sttActive, sttError, o
       <div className="flex-1 flex overflow-hidden">
         {/* Chat column */}
         <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-4 py-2 border-b border-gp-accent/20 bg-gp-surface/20">
+            <div className="text-center">
+              <p className="text-gp-mint/50 text-[10px] uppercase tracking-widest">Time left</p>
+              <p className="text-2xl font-bold text-gp-mint">{game.gameTimeLeft}s</p>
+            </div>
+          </div>
+
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 pb-10 gp-scrollbar">
             {game.messages.length === 0 && (
               <p className="text-gp-mint/30 text-xs text-center pt-8">
                 Game started! Chat freely — but don't say your forbidden words!
@@ -430,10 +432,11 @@ function PlayingView({ game, onSendMessage, sttSupported, sttActive, sttError, o
               </div>
             )}
           </div>
+          <div className="h-4 shrink-0" aria-hidden="true" />
         </div>
 
         {/* Sidebar: forbidden words of OTHER players */}
-        <aside className="hidden md:flex flex-col w-48 border-l border-gp-accent/20 bg-gp-surface/10 overflow-y-auto p-3 gap-3">
+        <aside className="hidden md:flex flex-col w-48 border-l border-gp-accent/20 bg-gp-surface/10 overflow-y-auto p-3 gap-3 gp-scrollbar">
           <p className="text-gp-accent text-[10px] uppercase tracking-widest">Others' words</p>
           {game.players
             .filter((p) => p.id !== game.localPlayerId)
@@ -443,12 +446,42 @@ function PlayingView({ game, onSendMessage, sttSupported, sttActive, sttError, o
           <p className="text-gp-mint/30 text-[10px] mt-2">
             Your own words are hidden. Don't say them!
           </p>
-          <div className="mt-auto text-center">
-            <p className="text-gp-mint/50 text-[10px]">Active</p>
-            <p className="text-gp-mint font-bold text-xl">{activePlrs.length}</p>
+          <div className="mt-auto space-y-2">
+            <div className="text-center">
+              <p className="text-gp-mint/50 text-[10px]">Active</p>
+              <p className="text-gp-mint font-bold text-xl">{activePlrs.length}</p>
+            </div>
+            <Button variant="destructive" size="sm" onClick={handleQuit} className="w-full">
+              Quit
+            </Button>
           </div>
         </aside>
       </div>
+
+      {showQuitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onClick={() => setShowQuitConfirm(false)}>
+          <div
+            className="w-full max-w-sm rounded-xl border border-gp-accent/30 bg-gp-surface p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-gp-mint font-semibold mb-2">Leave game?</h3>
+            <p className="text-gp-mint/70 text-sm mb-4">Are you sure you want to quit this game?</p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowQuitConfirm(false)}
+                className="border-gp-mint/70 text-gp-mint hover:bg-gp-mint/10"
+              >
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" onClick={confirmQuit}>
+                Quit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -534,9 +567,24 @@ function PlayerWordCard({ player }: { player: DsiPlayer }) {
 // Finished view
 // ---------------------------------------------------------------------------
 
-function FinishedView({ game, onLeave }: { game: DsiGameState; onLeave: () => void }) {
+function FinishedView({
+  game,
+  onLeave,
+  onShowReplay,
+}: {
+  game: DsiGameState;
+  onLeave: () => void;
+  onShowReplay: () => void;
+}) {
   const winner = game.players.find((p) => p.id === game.winnerId);
   const isLocalWinner = game.winnerId === game.localPlayerId;
+  const ranking = getRanking(game);
+
+  function getResultText() {
+    if (isLocalWinner) return 'Congratulations — you were the last one standing!';
+    if (winner) return `${winner.name} was the last one to avoid saying their forbidden words.`;
+    return 'Everyone said their forbidden word. Well played all!';
+  }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6 text-center">
@@ -546,36 +594,191 @@ function FinishedView({ game, onLeave }: { game: DsiGameState; onLeave: () => vo
           {winner ? (isLocalWinner ? 'You Win!' : `${winner.name} Wins!`) : 'It\'s a Draw!'}
         </h2>
         <p className="text-gp-mint/60 text-sm">
-          {isLocalWinner
-            ? 'Congratulations — you were the last one standing!'
-            : winner
-            ? `${winner.name} was the last one to avoid saying their forbidden words.`
-            : 'Everyone said their forbidden word. Well played all!'}
+          {getResultText()}
         </p>
       </div>
 
-      {/* Final word reveal */}
-      <div className="w-full max-w-sm space-y-2">
-        <p className="text-gp-accent text-xs uppercase tracking-widest mb-3">Final Words</p>
-        {game.players.map((p) => {
-          const isLocal = p.id === game.localPlayerId;
-          const words = p.wordSlots.map((s) => s.finalWord).filter(Boolean) as string[];
-          return (
-            <div key={p.id} className="flex items-center gap-2 text-sm bg-gp-surface/40 rounded-lg px-3 py-2">
-              <span>{p.isBot ? '🤖' : '👤'}</span>
-              <span className={`font-medium flex-1 text-left ${p.isOut ? 'text-red-400 line-through' : 'text-gp-mint'}`}>
-                {isLocal ? 'You' : p.name}
-                {p.id === game.winnerId && ' 🏆'}
-              </span>
-              <span className="text-gp-mint/50 capitalize text-xs">{words.join(', ')}</span>
-            </div>
-          );
-        })}
+      <div className="w-full max-w-2xl border border-gp-accent/30 rounded-xl bg-gp-surface/20 p-3">
+        <p className="text-gp-accent text-xs uppercase tracking-widest mb-3">Ranking & Final Words</p>
+        <div className="space-y-1.5">
+          {ranking.map((entry) => {
+            const isLocal = entry.player.id === game.localPlayerId;
+            const finalWord = entry.finalWords.join(', ');
+            const outedWord = entry.word ?? 'unknown';
+
+            return (
+              <div
+                key={entry.player.id}
+                className="bg-gp-surface/50 rounded-lg border border-gp-accent/20 px-3 py-2 text-sm flex items-center gap-2"
+              >
+                <span className="w-7 h-7 flex items-center justify-center rounded-full bg-gp-accent/20 text-gp-mint text-xs font-bold border border-gp-accent/40 shrink-0">
+                  {entry.rank}
+                </span>
+                <span className="flex items-center gap-1.5 flex-1 text-left min-w-0">
+                  <span>{entry.player.isBot ? '🤖' : '👤'}</span>
+                  <span className={`truncate ${entry.player.isOut ? 'text-red-400 line-through' : 'text-gp-mint'}`}>
+                    {isLocal ? 'You' : entry.player.name}
+                    {entry.player.id === game.winnerId ? ' 🏆' : ''}
+                  </span>
+                </span>
+                <span className="text-xs shrink-0">
+                  {entry.outed ? (
+                    <>
+                      <span className="text-red-400">Out by </span>
+                      <span className="text-red-400 font-bold">"{outedWord}"</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-gp-mint/60">Not saying </span>
+                      <span className="text-gp-mint/60 font-bold">"{finalWord ? finalWord : '—'}"</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      <Button variant="primary" size="lg" onClick={onLeave}>
-        Back to Lobby
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="lg" 
+          onClick={onShowReplay}
+          title="Chat Replay"
+          aria-label="Chat Replay"
+        >
+          <span aria-hidden="true">📜 </span>
+          <span className="ml-1.5">Chat Replay</span>
+        </Button>
+        <Button variant="primary" size="lg" onClick={onLeave}>
+          Back to Lobby
+        </Button>
+      </div>
     </div>
   );
+}
+
+interface ChatReplayPageProps {
+  game: DsiGameState;
+  onClose: () => void;
+}
+
+function ChatReplayPage({ game, onClose }: ChatReplayPageProps) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 p-3 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-5xl h-[85vh] bg-gp-bg border border-gp-accent/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gp-accent/20 bg-gp-surface/30">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            title="Back to Result"
+            aria-label="Back to Result"
+          >
+            X
+          </Button>
+          <div className="flex-1 min-w-0">
+            <span className="text-gp-mint font-semibold text-sm truncate block">Chat Replay</span>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 pb-6 space-y-2 gp-scrollbar">
+          {game.messages.length === 0 && (
+            <p className="text-gp-mint/30 text-sm text-center py-10">No messages were sent.</p>
+          )}
+          {game.messages.map((msg) => {
+            const isLocal = msg.playerId === game.localPlayerId;
+            return (
+              <div key={msg.id} className={`flex flex-col ${isLocal ? 'items-end' : 'items-start'}`}>
+                <span className="text-gp-mint/50 text-[10px] px-1 mb-0.5">{msg.playerName}</span>
+                <div
+                  className={`px-3 py-1.5 rounded-xl text-sm max-w-[75%] break-words ${
+                    msg.triggeredWord
+                      ? 'bg-red-900/50 border border-red-500/50 text-red-200'
+                      : isLocal
+                      ? 'bg-gp-accent/30 text-gp-mint'
+                      : 'bg-gp-surface text-gp-mint/90'
+                  }`}
+                >
+                  {msg.triggeredWord ? highlightWord(msg.text, msg.triggeredWord) : msg.text}
+                </div>
+                {msg.triggeredWord && (
+                  <span className="text-xs mt-0.5 px-1">
+                    {msg.playerName}'s word was
+                    <span className="text-red-400"> "{msg.triggeredWord}"</span>
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PlayerRankEntry {
+  player: DsiPlayer;
+  rank: number;
+  outed: boolean;
+  word: string | null;
+  finalWords: string[];
+}
+
+function getRanking(game: DsiGameState): PlayerRankEntry[] {
+  const firstOutByPlayer = new Map<string, DsiChatMessage>();
+
+  game.messages.forEach((msg) => {
+    if (!msg.triggeredWord) return;
+    if (!firstOutByPlayer.has(msg.playerId)) {
+      firstOutByPlayer.set(msg.playerId, msg);
+    }
+  });
+
+  const survivors: PlayerRankEntry[] = [];
+  const outs: Array<PlayerRankEntry & { order: number }> = [];
+
+  game.players.forEach((player, order) => {
+    const elimination = firstOutByPlayer.get(player.id);
+    if (player.isOut && elimination) {
+      outs.push({
+        player,
+        rank: 0,
+        outed: true,
+        word: elimination.triggeredWord ?? null,
+        order,
+        finalWords: player.wordSlots.map((slot) => slot.finalWord).filter(Boolean) as string[],
+      });
+    } else {
+      survivors.push({
+        player,
+        rank: 1,
+        outed: false,
+        word: null,
+        finalWords: player.wordSlots.map((slot) => slot.finalWord).filter(Boolean) as string[],
+      });
+    }
+  });
+
+  const outSorted = [...outs].sort((a, b) => {
+    const first = game.messages.findIndex((m) => m === (firstOutByPlayer.get(a.player.id) as DsiChatMessage));
+    const second = game.messages.findIndex((m) => m === (firstOutByPlayer.get(b.player.id) as DsiChatMessage));
+    return first - second;
+  });
+  const sorted: PlayerRankEntry[] = [
+    ...survivors.sort((a, b) => a.player.name.localeCompare(b.player.name)),
+    ...outSorted.map((entry, idx) => ({
+      ...entry,
+      rank: game.players.length - idx,
+      outed: true,
+    })),
+  ];
+
+  return sorted;
 }

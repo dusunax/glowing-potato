@@ -10,7 +10,7 @@ import { InventoryPanel } from './components/panels/InventoryPanel';
 import { CraftingPanel } from './components/panels/CraftingPanel';
 import { DiscoveryPanel } from './components/panels/DiscoveryPanel';
 import { SpawnPanel } from './components/panels/SpawnPanel';
-import { DontSayIt } from './components/dont-say-it/DontSayIt';
+import { DontSayIt } from './features/dont-say-it';
 import { Button } from '@glowing-potato/ui';
 
 // --- Collection game screen ---
