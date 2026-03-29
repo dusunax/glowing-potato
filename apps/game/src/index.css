@@ -7,3 +7,28 @@ body {
   color: rgb(var(--gp-mint));
   font-family: 'Nunito', system-ui, sans-serif;
 }
+
+.gp-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.gp-scrollbar::-webkit-scrollbar-track {
+  background: rgba(var(--gp-bg), 0.45);
+  border-radius: 999px;
+}
+
+.gp-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgb(var(--gp-accent)), rgb(var(--gp-mint)));
+  border-radius: 999px;
+  border: 2px solid rgba(var(--gp-bg), 0.8);
+}
+
+.gp-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgb(var(--gp-mint)), rgb(var(--gp-accent)));
+}
+
+.gp-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--gp-accent)) rgba(var(--gp-bg), 0.45);
+}
