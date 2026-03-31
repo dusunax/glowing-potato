@@ -755,11 +755,6 @@ export function useDontSayIt(): UseDontSayItReturn {
     };
   }, [game?.phase, game?.isHost, localRoomId, startHostVotingTimer, startHostGameTimer, stopHostTimers]);
 
-  const updateRoom = useCallback(
-    (roomId: string, updater: (current: DbRoom | null) => DbRoom | null | undefined) =>
-      db ? runTransaction(ref(db, roomPath(roomId)), updater) : Promise.resolve({} as never),
-    [db],
-  );
 
   const createRoom = useCallback(
     async (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => {
