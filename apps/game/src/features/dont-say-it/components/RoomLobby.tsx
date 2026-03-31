@@ -8,7 +8,7 @@ import { Button, Card, CardHeader, CardBody, CardTitle, CardDescription } from '
 interface RoomLobbyProps {
   rooms: DsiRoomSummary[];
   onJoinRoom: (roomId: string, playerName: string) => void;
-  onJoinPrivate: (roomId: string, playerName: string) => 'ok' | 'not-found' | 'full';
+  onJoinPrivate: (roomId: string, playerName: string) => 'ok' | 'not-found' | 'full' | Promise<'ok' | 'not-found' | 'full'>;
   onCreateRoom: (title: string, visibility: RoomVisibility, maxPlayers: number, playerName: string) => void;
   onBack: () => void;
 }
