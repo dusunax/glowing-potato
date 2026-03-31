@@ -1,7 +1,7 @@
 {
   "name": "@glowing-potato/game",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,11 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@glowing-potato/ui": "*",
+    "@glowing-potato/theme": "workspace:*",
+    "@glowing-potato/ui": "workspace:*",
+    "firebase": "^11.9.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
+    "@glowing-potato/tsconfig": "workspace:*",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

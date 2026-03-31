@@ -6,7 +6,7 @@ A cozy browser-based mini-game arcade built with React, TypeScript, and Vite —
 
 A mini-game lobby lets you pick from a slot-machine-style carousel. The first available game is **Glowing Potato**: explore a world governed by **seasons**, **weather**, and **time of day**, collect items that only appear under specific conditions, then craft them into rarer goods.
 
-## 🎮 How to Play
+## How to Play
 
 1. Choose a game from the **Mini-Game Arcade** lobby (spin or pick manually).
 2. In Glowing Potato: watch the **World Conditions** panel — season, weather, and time of day.
@@ -73,7 +73,7 @@ docs/
   roadmap.md        # Future feature ideas
 ```
 
-## 🌟 Features
+## Features
 
 - **Mini-game lobby** with slot-machine carousel
 - **20+ unique collectable items** spanning flora, minerals, creatures, and special categories

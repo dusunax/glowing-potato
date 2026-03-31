@@ -1,0 +1,6 @@
+{
+  "name": "@glowing-potato/tsconfig",
+  "private": true,
+  "version": "0.0.2",
+  "files": ["*.json", "!package.json"]
+}

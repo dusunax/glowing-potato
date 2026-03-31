@@ -2,22 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-/*
- * Glowing Potato design tokens
- * https://colorhunt.co/palette/091413285a48408a71b0e4cc
- *
- * Defined as space-separated RGB channels so Tailwind's opacity modifiers
- * (e.g. bg-gp-surface/50, text-gp-mint/70) generate valid CSS.
- */
-:root {
-  --gp-bg:      9 20 19;      /* #091413 */
-  --gp-surface: 40 90 72;     /* #285a48 */
-  --gp-accent:  64 138 113;   /* #408a71 */
-  --gp-mint:    176 228 204;  /* #b0e4cc */
-}
-
 body {
   background-color: rgb(var(--gp-bg));
   color: rgb(var(--gp-mint));
   font-family: 'Nunito', system-ui, sans-serif;
+}
+
+.gp-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.gp-scrollbar::-webkit-scrollbar-track {
+  background: rgba(var(--gp-bg), 0.45);
+  border-radius: 999px;
+}
+
+.gp-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgb(var(--gp-accent)), rgb(var(--gp-mint)));
+  border-radius: 999px;
+  border: 2px solid rgba(var(--gp-bg), 0.8);
+}
+
+.gp-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgb(var(--gp-mint)), rgb(var(--gp-accent)));
+}
+
+.gp-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--gp-accent)) rgba(var(--gp-bg), 0.45);
 }

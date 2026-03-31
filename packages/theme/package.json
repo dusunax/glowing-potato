@@ -1,0 +1,15 @@
+{
+  "name": "@glowing-potato/theme",
+  "private": true,
+  "version": "0.0.2",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tailwind": "./tailwind.js",
+    "./index.css": "./index.css"
+  },
+  "devDependencies": {
+    "@glowing-potato/tsconfig": "workspace:*"
+  }
+}
