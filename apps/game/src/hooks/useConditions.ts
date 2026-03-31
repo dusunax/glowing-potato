@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { WorldConditions } from '../types/conditions';
 import { advanceTime } from '../utils/time';
+import { WEATHER_BY_SEASON } from '../constants/weather';
 
 const INITIAL_CONDITIONS: WorldConditions = {
   season: 'Spring',
@@ -25,5 +26,19 @@ export function useConditions() {
     return msgs;
   }, []);
 
-  return { conditions, advance };
+  const shiftWeather = useCallback((): string => {
+    let msg = '';
+    setConditions((prev) => {
+      const options = WEATHER_BY_SEASON[prev.season];
+      if (!options || options.length === 0) return prev;
+      const others = options.filter((w) => w !== prev.weather);
+      const pool = others.length > 0 ? others : options;
+      const next = pool[Math.floor(Math.random() * pool.length)]!;
+      msg = `Weather shifted to ${next}!`;
+      return { ...prev, weather: next };
+    });
+    return msg;
+  }, []);
+
+  return { conditions, advance, shiftWeather };
 }

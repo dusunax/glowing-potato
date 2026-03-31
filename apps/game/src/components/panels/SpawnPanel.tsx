@@ -20,7 +20,7 @@ export function SpawnPanel({ conditions }: SpawnPanelProps) {
   const spawnable = getSpawnableItems(ITEMS, conditions);
 
   return (
-    <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex flex-col h-full">
+    <div className="flex flex-col">
       <CardTitle className="mb-0.5">🌍 Spawnable Now</CardTitle>
       {/* text-gp-mint/70 on gp-surface: ~3.65:1 — acceptable for small hint text ✓ */}
       <p className="text-xs text-gp-mint/70 mb-3">{spawnable.length} item(s) available</p>
@@ -28,7 +28,7 @@ export function SpawnPanel({ conditions }: SpawnPanelProps) {
         // text-gp-mint/85 on gp-surface: ~4.55:1 — passes WCAG AA ✓
         <p className="text-gp-mint/85 text-sm">Nothing spawns in these conditions.</p>
       ) : (
-        <div className="space-y-2 overflow-y-auto flex-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto max-h-72">
           {spawnable.map((item) => (
             <div key={item.id} className="flex items-center gap-2 bg-gp-bg/30 rounded-lg p-2 border border-gp-accent/20">
               <span className="text-xl">{item.emoji}</span>

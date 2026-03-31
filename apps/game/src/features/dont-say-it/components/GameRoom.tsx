@@ -615,7 +615,6 @@ function FinishedView({
         <p className="text-gp-accent text-xs uppercase tracking-widest mb-3">Ranking & Final Words</p>
         <div className="space-y-1.5">
           {ranking.map((entry) => {
-            const isLocal = entry.player.id === game.localPlayerId;
             const finalWord = entry.finalWords.join(', ');
             const outedWord = entry.word ?? 'unknown';
 
