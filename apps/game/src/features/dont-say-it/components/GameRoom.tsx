@@ -17,6 +17,7 @@ interface GameRoomProps {
   sttError: string | null;
   onToggleStt: () => void;
   sttInterim: string;
+  onSignOut?: () => void;
 }
 
 export function GameRoom({
@@ -30,6 +31,7 @@ export function GameRoom({
   sttError,
   onToggleStt,
   sttInterim,
+  onSignOut,
 }: GameRoomProps) {
   const privateRoomCode = game.roomVisibility === 'private' ? game.roomId : null;
   const [copied, setCopied] = useState(false);
@@ -69,6 +71,15 @@ export function GameRoom({
             >
               📋 {copied ? 'Copied!' : 'Copy room code'}
             </Button>
+          )}
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="px-2 py-1.5 rounded-lg border border-gp-accent/20 text-gp-mint/50 hover:text-gp-mint/80 hover:border-gp-accent/40 transition-colors text-xs"
+            >
+              Sign out
+            </button>
           )}
         </header>
 
@@ -573,6 +584,8 @@ function FinishedView({
   onLeave: () => void;
   onShowReplay: () => void;
 }) {
+  const localPlayer = game.players.find((p) => p.id === game.localPlayerId);
+  const localName = localPlayer?.name ?? 'You';
   const winner =
     game.players.find((p) => p.id === game.winnerId && !p.isOut) ??
     (game.players.filter((p) => !p.isOut).length === 1 ? game.players.find((p) => !p.isOut) : null);
@@ -581,7 +594,7 @@ function FinishedView({
   const ranking = getRanking(game);
 
   function getResultText() {
-    if (isLocalWinner) return 'Congratulations — you were the last one standing!';
+    if (isLocalWinner) return `Congratulations ${localName} — you were the last one standing!`;
     if (winner) return `${winner.name} was the last one to avoid saying their forbidden words.`;
     return 'Everyone said their forbidden word. Well played all!';
   }
@@ -591,7 +604,7 @@ function FinishedView({
       <div className="text-6xl">{isLocalWinner ? '🏆' : winner ? '🙁' : '🤝'}</div>
       <div>
         <h2 className="text-3xl font-bold text-gp-mint mb-2">
-          {winner ? (isLocalWinner ? 'You Win!' : `Player ${winner.name} Wins!`) : 'It\'s a Draw!'}
+          {winner ? (isLocalWinner ? `${localName} Wins!` : `${winner.name} Wins!`) : 'It\'s a Draw!'}
         </h2>
         <p className="text-gp-mint/60 text-sm">
           {getResultText()}
@@ -617,7 +630,7 @@ function FinishedView({
                 <span className="flex items-center gap-1.5 flex-1 text-left min-w-0">
                   <span>{entry.player.isBot ? '🤖' : '👤'}</span>
                   <span className={`truncate ${entry.player.isOut ? 'text-red-400 line-through' : 'text-gp-mint'}`}>
-                    {isLocal ? 'You' : entry.player.name}
+                    {entry.player.name}
                     {entry.player.id === winnerId ? ' 🏆' : ''}
                   </span>
                 </span>
