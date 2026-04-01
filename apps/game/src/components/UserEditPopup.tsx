@@ -15,7 +15,7 @@ interface UserEditPopupProps {
 
 export function UserEditPopup({ currentNickname, onSave, onClose }: UserEditPopupProps) {
   const [draft, setDraft] = useState(currentNickname);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'taken' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -75,9 +75,6 @@ export function UserEditPopup({ currentNickname, onSave, onClose }: UserEditPopu
             className="w-full bg-gp-bg border border-gp-accent/40 rounded-lg px-3 py-2 text-sm text-gp-mint placeholder:text-gp-mint/30 focus:outline-none focus:ring-2 focus:ring-gp-mint/40"
             onKeyDown={(e) => e.key === 'Enter' && handleSave()}
           />
-          {status === 'taken' && (
-            <p className="text-red-400 text-xs">This nickname is already taken.</p>
-          )}
           {status === 'error' && (
             <p className="text-red-400 text-xs">Something went wrong. Please try again.</p>
           )}

@@ -6,10 +6,10 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-import { doc, getDoc, setDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseAuth, getFirestoreDb, hasAuthConfig } from '../features/dont-say-it/lib/firebase';
 
-export type NicknameUpdateResult = 'success' | 'taken' | 'error';
+export type NicknameUpdateResult = 'success' | 'error';
 
 function resolveNickname(storedNickname: string | undefined, user: User): string {
   return storedNickname || user.displayName || '';
@@ -28,26 +28,28 @@ export function useAuth() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
 
-      if (firebaseUser) {
-        const db = getFirestoreDb();
-        if (db) {
-          const ref = doc(db, 'users', firebaseUser.uid);
-          const snap = await getDoc(ref);
-          if (snap.exists()) {
-            setNickname(resolveNickname(snap.data().nickname, firebaseUser));
+      try {
+        if (firebaseUser) {
+          const db = getFirestoreDb();
+          if (db) {
+            const ref = doc(db, 'users', firebaseUser.uid);
+            const snap = await getDoc(ref);
+            if (snap.exists()) {
+              setNickname(resolveNickname(snap.data().lastNickname, firebaseUser));
+            } else {
+              const initial = resolveNickname(undefined, firebaseUser);
+              await setDoc(ref, { playerId: firebaseUser.uid, lastNickname: initial, lastSeenAt: serverTimestamp() });
+              setNickname(initial);
+            }
           } else {
-            const initial = resolveNickname(undefined, firebaseUser);
-            await setDoc(ref, { uid: firebaseUser.uid, nickname: initial });
-            setNickname(initial);
+            setNickname(resolveNickname(undefined, firebaseUser));
           }
         } else {
-          setNickname(resolveNickname(undefined, firebaseUser));
+          setNickname('');
         }
-      } else {
-        setNickname('');
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     });
 
     return unsubscribe;
@@ -74,11 +76,7 @@ export function useAuth() {
 
       const db = getFirestoreDb();
       if (db) {
-        const q = query(collection(db, 'users'), where('nickname', '==', trimmed));
-        const snap = await getDocs(q);
-        const taken = !snap.empty && snap.docs.some((d) => d.id !== user.uid);
-        if (taken) return 'taken';
-        await setDoc(doc(db, 'users', user.uid), { uid: user.uid, nickname: trimmed }, { merge: true });
+        await setDoc(doc(db, 'users', user.uid), { playerId: user.uid, lastNickname: trimmed, lastSeenAt: serverTimestamp() }, { merge: true });
       }
 
       setNickname(trimmed);
