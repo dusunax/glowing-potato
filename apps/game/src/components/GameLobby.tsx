@@ -2,9 +2,12 @@
 // player can pick which game to play.
 
 import { useState, useEffect, useRef } from 'react';
+import type { User } from 'firebase/auth';
 import { MINI_GAMES } from '../data/minigames';
 import type { MiniGame } from '../types/minigame';
 import { Button, Badge } from '@glowing-potato/ui';
+import { UserEditPopup } from './UserEditPopup';
+import type { NicknameUpdateResult } from '../hooks/useAuth';
 
 // Fixed card dimensions shared between GameCard and the slot frame overlay.
 const CARD_WIDTH_CLASS = 'w-64';
@@ -12,12 +15,17 @@ const CARD_HEIGHT_CLASS = 'h-72';
 
 interface GameLobbyProps {
   onSelectGame: (gameId: string) => void;
+  user?: User | null;
+  nickname?: string;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
+  onUpdateNickname?: (nickname: string) => Promise<NicknameUpdateResult>;
 }
 
-export function GameLobby({ onSelectGame }: GameLobbyProps) {
-  const mainGameIndex = MINI_GAMES.findIndex((game) => game.id === 'dont-say-it');
+export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, onUpdateNickname }: GameLobbyProps) {  const mainGameIndex = MINI_GAMES.findIndex((game) => game.id === 'dont-say-it');
   const [activeIndex, setActiveIndex] = useState(mainGameIndex >= 0 ? mainGameIndex : 0);
   const [spinning, setSpinning] = useState(false);
+  const [showUserEdit, setShowUserEdit] = useState(false);
   const spinIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const total = MINI_GAMES.length;
@@ -65,9 +73,60 @@ export function GameLobby({ onSelectGame }: GameLobbyProps) {
   const active = MINI_GAMES[activeIndex];
   const prevGame = MINI_GAMES[(activeIndex - 1 + total) % total];
   const nextGame = MINI_GAMES[(activeIndex + 1) % total];
+  const userDisplayName = user ? (nickname || user.displayName || '') : '';
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gp-bg">
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 bg-gp-bg">
+      {/* Top-right auth controls */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        {user ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowUserEdit(true)}
+              aria-label="Edit profile"
+              title={userDisplayName || 'Profile'}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gp-accent/30 text-gp-mint/70 hover:text-gp-mint hover:border-gp-accent/60 hover:bg-gp-accent/10 transition-colors text-sm"
+            >
+              <span className="w-6 h-6 rounded-full bg-gp-surface flex items-center justify-center text-xs font-bold text-gp-mint">
+                {(userDisplayName || '?')[0].toUpperCase()}
+              </span>
+              <span className="max-w-24 truncate">{userDisplayName}</span>
+              <span className="text-xs opacity-60">✎</span>
+            </button>
+            {onSignOut && (
+              <button
+                type="button"
+                onClick={onSignOut}
+                aria-label="Sign out"
+                className="px-2 py-1.5 rounded-lg border border-gp-accent/20 text-gp-mint/50 hover:text-gp-mint/80 hover:border-gp-accent/40 transition-colors text-xs"
+              >
+                Sign out
+              </button>
+            )}
+          </>
+        ) : (
+          onSignIn && (
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gp-accent/30 text-gp-mint/70 hover:text-gp-mint hover:border-gp-accent/60 hover:bg-gp-accent/10 transition-colors text-sm font-medium"
+            >
+              <span>G</span>
+              Sign in
+            </button>
+          )
+        )}
+      </div>
+
+      {/* User edit popup */}
+      {showUserEdit && user && onUpdateNickname && (
+        <UserEditPopup
+          currentNickname={userDisplayName}
+          onSave={onUpdateNickname}
+          onClose={() => setShowUserEdit(false)}
+        />
+      )}
       {/* Header */}
       <header className="text-center mb-10">
         <p className="text-xs font-semibold tracking-widest text-gp-accent uppercase mb-2">
