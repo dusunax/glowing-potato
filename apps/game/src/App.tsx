@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { GameLobby } from './components/GameLobby';
 import { useGameState } from './hooks/useGameState';
+import { useAuth } from './hooks/useAuth';
 import { ConditionsPanel } from './components/panels/ConditionsPanel';
 import { InventoryPanel } from './components/panels/InventoryPanel';
 import { CraftingPanel } from './components/panels/CraftingPanel';
@@ -72,14 +73,50 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
 
 export default function App() {
   const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const { user, nickname, loading, signInWithGoogle, signOut, updateNickname } = useAuth();
+
+  async function handleSignIn() {
+    setSignInError(null);
+    try {
+      await signInWithGoogle();
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message.includes('popup-closed')) return;
+      setSignInError('로그인에 실패했어요. 다시 시도해주세요.');
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gp-bg">
+        <span className="text-gp-mint/50 text-sm">Loading…</span>
+      </div>
+    );
+  }
 
   if (activeGame === 'collection') {
     return <CollectionGame onBack={() => setActiveGame(null)} />;
   }
 
   if (activeGame === 'dont-say-it') {
-    return <DontSayIt onBack={() => setActiveGame(null)} />;
+    return <DontSayIt onBack={() => setActiveGame(null)} nickname={nickname} isLoggedIn={!!user} onSignIn={handleSignIn} onSignOut={signOut} onUpdateNickname={updateNickname} />;
   }
 
-  return <GameLobby onSelectGame={setActiveGame} />;
+  return (
+    <>
+      {signInError && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-300 text-sm">
+          {signInError}
+        </div>
+      )}
+      <GameLobby
+        onSelectGame={setActiveGame}
+        user={user}
+        nickname={nickname}
+        onSignIn={handleSignIn}
+        onSignOut={signOut}
+        onUpdateNickname={updateNickname}
+      />
+    </>
+  );
 }

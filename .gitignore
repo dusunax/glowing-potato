@@ -1,3 +1,7 @@
+# Firebase rules (deployed separately, not committed)
+firebase-rules/
+firestore.rules
+
 # Logs
 logs
 *.log
