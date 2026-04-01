@@ -2,11 +2,10 @@
 // mini-game when the player selects one.
 // Does not contain game logic — delegates to hooks and child components.
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { GameLobby } from './components/GameLobby';
 import { useGameState } from './hooks/useGameState';
 import { useAuth } from './hooks/useAuth';
-import { ConditionsPanel } from './components/panels/ConditionsPanel';
 import { InventoryPanel } from './components/panels/InventoryPanel';
 import { CraftingPanel } from './components/panels/CraftingPanel';
 import { DiscoveryPanel } from './components/panels/DiscoveryPanel';
@@ -18,6 +17,7 @@ import { Button } from '@glowing-potato/ui';
 import { TIME_PERIOD_EMOJIS } from './constants/timePeriods';
 import { WEATHER_EMOJIS } from './constants/weather';
 import { getSeasonColor } from './utils/time';
+import { tileKey } from './hooks/useMap';
 import type { ActionCard } from './types/actionCard';
 
 // ── Small inline condition badge ─────────────────────────────────────────────
@@ -45,6 +45,8 @@ const TABS: { id: Tab; label: string }[] = [
 function CollectionGame({ onBack }: { onBack: () => void }) {
   const {
     conditions,
+    playerHp,
+    maxPlayerHp,
     inventory,
     discovered,
     events,
@@ -54,7 +56,13 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
     handleCraft,
     position,
     currentBiomeInfo,
+    visitedTiles,
+    knownTiles,
     canMoveTo,
+    getTileResources,
+    getReachableTiles,
+    getAnimalsAt,
+    getAdjacentAnimals,
     hand,
     selectedCard,
     selectCard,
@@ -66,8 +74,21 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
 
   const seasonColorClass = getSeasonColor(conditions.season);
 
+  // Compute adjacent animals for attack targeting
+  const adjacentAnimals = useMemo(() => getAdjacentAnimals(position), [getAdjacentAnimals, position]);
+
+  // Build the set of attack-target tiles (adjacent tiles that have an alive animal)
+  const attackTargetTiles = useMemo(() => {
+    if (selectedCard?.type !== 'attack') return new Set<string>();
+    const tiles = new Set<string>();
+    for (const a of adjacentAnimals) {
+      tiles.add(tileKey(a.position.x, a.position.y));
+    }
+    return tiles;
+  }, [selectedCard, adjacentAnimals]);
+
   function onCardClick(card: ActionCard) {
-    if (card.type === 'explore' || card.type === 'sprint') {
+    if (card.type === 'explore' || card.type === 'sprint' || card.type === 'attack') {
       // Toggle selection — requires a map tile target
       selectCard(card);
     } else {
@@ -77,10 +98,23 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
   }
 
   function onTileClick(x: number, y: number) {
-    if (selectedCard && (selectedCard.type === 'explore' || selectedCard.type === 'sprint')) {
+    if (!selectedCard) return;
+    if (selectedCard.type === 'explore' || selectedCard.type === 'sprint') {
       handlePlayCard(selectedCard, { x, y });
+    } else if (selectedCard.type === 'attack') {
+      // Find animal on that tile
+      const target = adjacentAnimals.find((a) => a.position.x === x && a.position.y === y);
+      if (target) handlePlayCard(selectedCard, undefined, target.id);
     }
   }
+
+  const isTargetingCard = selectedCard && (
+    selectedCard.type === 'explore' || selectedCard.type === 'sprint' || selectedCard.type === 'attack'
+  );
+
+  // HP bar colour
+  const hpRatio = playerHp / maxPlayerHp;
+  const hpColor = hpRatio > 0.6 ? 'bg-emerald-400' : hpRatio > 0.3 ? 'bg-amber-400' : 'bg-red-500';
 
   return (
     <div className="min-h-screen bg-gp-bg flex flex-col">
@@ -91,11 +125,32 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
             ← Lobby
           </Button>
           <h1 className="text-base font-bold text-gp-mint">🌿 Glowing Potato</h1>
-          <div className="flex items-center gap-2 ml-2 flex-wrap">
+
+          {/* Conditions row */}
+          <div className="flex items-center gap-2 ml-2 flex-wrap flex-1">
             <CondPill emoji={TIME_PERIOD_EMOJIS[conditions.timePeriod]} label={conditions.timePeriod} />
             <CondPill emoji={WEATHER_EMOJIS[conditions.weather] ?? '🌤️'} label={conditions.weather} />
             <CondPill emoji="🍃" label={conditions.season} labelClass={seasonColorClass} />
-            <CondPill emoji="📅" label={`Day ${conditions.day}`} />
+
+            {/* Player HP */}
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gp-bg/40 border border-gp-accent/20">
+              <span>❤️</span>
+              <div className="flex items-center gap-1">
+                <div className="w-14 h-2 bg-gp-bg/60 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${hpColor}`}
+                    style={{ width: `${(playerHp / maxPlayerHp) * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs font-semibold text-gp-mint">{playerHp}/{maxPlayerHp}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Date — right side */}
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gp-accent/20 border border-gp-mint/20 ml-auto">
+            <span>📅</span>
+            <span className="text-sm font-bold text-gp-mint">Day {conditions.day}</span>
           </div>
         </div>
       </header>
@@ -113,6 +168,12 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
             onTileClick={onTileClick}
             currentBiomeInfo={currentBiomeInfo}
             canMoveTo={canMoveTo}
+            visitedTiles={visitedTiles}
+            knownTiles={knownTiles}
+            getTileResources={getTileResources}
+            getAnimalsAt={getAnimalsAt}
+            getReachableTiles={getReachableTiles}
+            attackTargetTiles={attackTargetTiles}
           />
 
           {/* Right column: action cards + event log */}
@@ -122,7 +183,6 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
             <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-semibold text-gp-mint text-lg">🃏 Action Cards</h2>
-                {/* text-gp-mint/60 on gp-surface: ~3.3:1 — readable for secondary info ✓ */}
                 <span className="text-xs text-gp-mint/60">{deckSize} left in deck</span>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -135,10 +195,12 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
                   />
                 ))}
               </div>
-              {selectedCard && (selectedCard.type === 'explore' || selectedCard.type === 'sprint') && (
+              {isTargetingCard && (
                 <div className="mt-3 flex items-center justify-center gap-3">
                   <p className="text-xs text-gp-mint/70">
-                    Click a highlighted tile on the map to move there
+                    {selectedCard.type === 'attack'
+                      ? 'Click an adjacent animal tile to attack'
+                      : 'Click a highlighted tile on the map to move there'}
                   </p>
                   <Button variant="ghost" size="sm" onClick={() => selectCard(null)}>
                     Cancel
@@ -146,6 +208,25 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
                 </div>
               )}
             </div>
+
+            {/* ── Nearby animals ───────────────────────────────────────────── */}
+            {adjacentAnimals.length > 0 && (
+              <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-3">
+                <h3 className="text-sm font-semibold text-red-300 mb-2">⚠️ Nearby Animals</h3>
+                <div className="flex flex-wrap gap-2">
+                  {adjacentAnimals.map((a) => (
+                    <div key={a.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gp-bg/40 border border-red-500/20">
+                      <span>{a.emoji}</span>
+                      <span className="text-xs text-gp-mint/85">{a.name}</span>
+                      <span className={`text-xs font-bold ${a.behavior === 'hostile' ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {a.behavior === 'hostile' ? '⚔️' : '🕊️'}
+                      </span>
+                      <span className="text-xs text-gp-mint/60">{a.hp}/{a.maxHp}HP</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── Event log ────────────────────────────────────────────────── */}
             <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex-1">
@@ -155,7 +236,7 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
                   No events yet. Play a card to start!
                 </p>
               ) : (
-                <div className="space-y-1.5 overflow-y-auto max-h-52">
+                <div className="space-y-1.5 overflow-y-auto max-h-44">
                   {events.map((ev) => (
                     <div
                       key={ev.id}
@@ -178,7 +259,6 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
 
         {/* ── Tabbed bottom panels ──────────────────────────────────────────── */}
         <div className="bg-gp-surface border border-gp-accent/30 rounded-xl overflow-hidden">
-          {/* Tab bar */}
           <div className="flex border-b border-gp-accent/30 overflow-x-auto">
             {TABS.map(({ id, label }) => (
               <button
@@ -195,26 +275,13 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
               </button>
             ))}
           </div>
-
-          {/* Tab content */}
           <div className="p-4 min-h-40">
-            {activeTab === 'inventory' && (
-              <InventoryPanel inventory={inventory} />
-            )}
+            {activeTab === 'inventory' && <InventoryPanel inventory={inventory} />}
             {activeTab === 'crafting' && (
-              <CraftingPanel
-                recipes={recipes}
-                canCraft={canCraft}
-                onCraft={handleCraft}
-                getQuantity={getQuantity}
-              />
+              <CraftingPanel recipes={recipes} canCraft={canCraft} onCraft={handleCraft} getQuantity={getQuantity} />
             )}
-            {activeTab === 'discovery' && (
-              <DiscoveryPanel discovered={discovered} />
-            )}
-            {activeTab === 'spawnable' && (
-              <SpawnPanel conditions={conditions} />
-            )}
+            {activeTab === 'discovery' && <DiscoveryPanel discovered={discovered} />}
+            {activeTab === 'spawnable' && <SpawnPanel conditions={conditions} />}
           </div>
         </div>
       </main>

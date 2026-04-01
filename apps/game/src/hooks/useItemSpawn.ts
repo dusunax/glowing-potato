@@ -12,11 +12,24 @@ interface UseItemSpawnOptions {
   biomeInfo: BiomeInfo;
   addItem: (itemId: string, qty?: number) => void;
   markDiscovered: (itemId: string) => void;
+  /** Returns remaining resources on the current tile; pass -1 to indicate depleted already */
+  consumeTileResource: () => number;
 }
 
-export function useItemSpawn({ conditions, biomeInfo, addItem, markDiscovered }: UseItemSpawnOptions) {
+export function useItemSpawn({
+  conditions,
+  biomeInfo,
+  addItem,
+  markDiscovered,
+  consumeTileResource,
+}: UseItemSpawnOptions) {
   const collect = useCallback(
     (lucky = false): string => {
+      // Consume one resource from the tile; -1 means already depleted
+      const remaining = consumeTileResource();
+      if (remaining < 0) {
+        return 'This area has been exhausted. Move to a new tile to find more.';
+      }
       const spawnable = getSpawnableItems(ITEMS, conditions);
       const item = lucky
         ? pickRandomItemLucky(spawnable, biomeInfo)
@@ -24,9 +37,10 @@ export function useItemSpawn({ conditions, biomeInfo, addItem, markDiscovered }:
       if (!item) return 'Nothing to collect right now. Try a different time or weather.';
       addItem(item.id);
       markDiscovered(item.id);
-      return `You found a ${item.emoji} ${item.name}!`;
+      const depletedNote = remaining === 0 ? ' (tile now exhausted)' : '';
+      return `You found a ${item.emoji} ${item.name}!${depletedNote}`;
     },
-    [conditions, biomeInfo, addItem, markDiscovered]
+    [conditions, biomeInfo, addItem, markDiscovered, consumeTileResource]
   );
 
   return { collect };

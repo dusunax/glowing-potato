@@ -8,7 +8,8 @@ export type ActionCardType =
   | 'scout'         // Reveal spawnable items at adjacent tiles
   | 'lucky_forage'  // Collect 2 items with higher rare odds
   | 'weather_shift' // Change current weather randomly
-  | 'windfall';     // Collect 3 items at once
+  | 'windfall'      // Collect 3 items at once
+  | 'attack';       // Attack an adjacent animal
 
 export interface ActionCard {
   /** Unique instance id (for React keys and deduplication) */
