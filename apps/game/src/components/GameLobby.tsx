@@ -22,8 +22,7 @@ interface GameLobbyProps {
   onUpdateNickname?: (nickname: string) => Promise<NicknameUpdateResult>;
 }
 
-export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, onUpdateNickname }: GameLobbyProps) {
-  const mainGameIndex = MINI_GAMES.findIndex((game) => game.id === 'dont-say-it');
+export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, onUpdateNickname }: GameLobbyProps) {  const mainGameIndex = MINI_GAMES.findIndex((game) => game.id === 'dont-say-it');
   const [activeIndex, setActiveIndex] = useState(mainGameIndex >= 0 ? mainGameIndex : 0);
   const [spinning, setSpinning] = useState(false);
   const [showUserEdit, setShowUserEdit] = useState(false);
