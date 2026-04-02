@@ -8,6 +8,7 @@ import type { MiniGame } from '../types/minigame';
 import { Button, Badge } from '@glowing-potato/ui';
 import { UserEditPopup } from './UserEditPopup';
 import type { NicknameUpdateResult } from '../hooks/useAuth';
+import { useLeaderboard } from '../hooks/useLeaderboard';
 
 // Fixed card dimensions shared between GameCard and the slot frame overlay.
 const CARD_WIDTH_CLASS = 'w-64';
@@ -27,6 +28,7 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
   const [spinning, setSpinning] = useState(false);
   const [showUserEdit, setShowUserEdit] = useState(false);
   const spinIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { records: leaderboard, loading: leaderboardLoading } = useLeaderboard(10);
 
   const total = MINI_GAMES.length;
 
@@ -262,6 +264,42 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
           ))}
         </div>
       </div>
+
+      {/* Leaderboard */}
+      <div className="mt-12 w-full max-w-3xl pb-10">
+        <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
+          🏆 Leaderboard — Glowing Potato
+        </h2>
+        {leaderboardLoading ? (
+          <p className="text-center text-gp-mint/40 text-sm">Loading…</p>
+        ) : leaderboard.length === 0 ? (
+          <p className="text-center text-gp-mint/40 text-sm">No records yet. Be the first to play!</p>
+        ) : (
+          <div className="rounded-xl border border-gp-accent/20 overflow-hidden">
+            {leaderboard.map((record, i) => (
+              <div
+                key={record.id ?? i}
+                className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                  i === 0 ? 'bg-gp-surface' : 'bg-gp-surface/40'
+                }`}
+              >
+                <span className={`w-6 text-center font-bold ${getRankColorClass(i)}`}>
+                  {getRankLabel(i)}
+                </span>
+                <span className="flex-1 font-medium text-gp-mint truncate">{record.nickname}</span>
+                <span className="font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
+                <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
+                <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {!user && (
+          <p className="text-center text-gp-mint/40 text-xs mt-3">
+            Sign in with Google to save your scores.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -271,6 +309,20 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
 interface GameCardProps {
   game: MiniGame;
   active?: boolean;
+}
+
+function getRankColorClass(rank: number): string {
+  if (rank === 0) return 'text-yellow-400';
+  if (rank === 1) return 'text-gp-mint/70';
+  if (rank === 2) return 'text-orange-400';
+  return 'text-gp-mint/40';
+}
+
+function getRankLabel(rank: number): string {
+  if (rank === 0) return '🥇';
+  if (rank === 1) return '🥈';
+  if (rank === 2) return '🥉';
+  return `${rank + 1}`;
 }
 
 // Fixed dimensions so ghost and active cards are always the same size.

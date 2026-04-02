@@ -2,10 +2,11 @@
 // mini-game when the player selects one.
 // Does not contain game logic — delegates to hooks and child components.
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { GameLobby } from './components/GameLobby';
 import { useGameState } from './hooks/useGameState';
 import { useAuth } from './hooks/useAuth';
+import { useScoreRecord } from './hooks/useScoreRecord';
 import { InventoryPanel } from './components/panels/InventoryPanel';
 import { CraftingPanel } from './components/panels/CraftingPanel';
 import { DiscoveryPanel } from './components/panels/DiscoveryPanel';
@@ -18,8 +19,10 @@ import { TIME_PERIOD_EMOJIS } from './constants/timePeriods';
 import { WEATHER_EMOJIS } from './constants/weather';
 import { getSeasonColor } from './utils/time';
 import { getItemById } from './data/items';
+import { calculateScore } from './utils/score';
 import { tileKey } from './hooks/useMap';
 import type { ActionCard } from './types/actionCard';
+import type { User } from 'firebase/auth';
 
 // ── Small inline condition badge ─────────────────────────────────────────────
 
@@ -76,7 +79,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'spawnable',  label: '🌍 Spawnable' },
 ];
 
-function CollectionGame({ onBack }: { onBack: () => void }) {
+function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?: User | null; nickname?: string }) {
   const {
     conditions,
     playerHp,
@@ -92,6 +95,8 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
     getQuantity,
     canCraft,
     handleCraft,
+    totalXpGained,
+    defeatedAnimals,
     position,
     currentBiomeInfo,
     visitedTiles,
@@ -110,6 +115,37 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
     handleUseItem,
     deckSize,
   } = useGameState();
+
+  const { saveRecord } = useScoreRecord();
+  const savedRef = useRef(false);
+
+  const finalScore = useMemo(() => {
+    if (!isPlayerDead) return 0;
+    return calculateScore({
+      survivalDays: conditions.day,
+      level: playerLevel,
+      totalXpGained,
+      inventorySnapshot: inventory,
+      getItemRarity: (id) => getItemById(id)?.rarity ?? 'common',
+    });
+  }, [isPlayerDead, conditions.day, playerLevel, totalXpGained, inventory]);
+
+  useEffect(() => {
+    if (!isPlayerDead || savedRef.current) return;
+    savedRef.current = true;
+    if (!user) return;
+    saveRecord({
+      userId: user.uid,
+      nickname: nickname || user.displayName || 'Anonymous',
+      score: finalScore,
+      survivalDays: conditions.day,
+      level: playerLevel,
+      totalXpGained,
+      defeatedAnimals,
+      inventorySnapshot: inventory,
+    });
+  }, [isPlayerDead, user, nickname, finalScore, conditions.day, playerLevel, totalXpGained, defeatedAnimals, inventory, saveRecord]);
+
 
   const BELT_SLOT_COUNT = 8;
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
@@ -474,9 +510,43 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
               <div className="overflow-hidden flex-1 min-h-0 flex relative">
                 {isPlayerDead && (
                   <div className="absolute inset-0 z-30 flex items-center justify-center bg-gp-bg/70 p-4">
-                    <div className="bg-gp-surface border border-red-500/40 rounded-xl p-5 text-center space-y-3">
-                      <p className="text-red-300 font-bold">💀 You died!</p>
-                      <p className="text-gp-mint/80 text-sm">You are defeated. Return to lobby to start over.</p>
+                    <div className="bg-gp-surface border border-red-500/40 rounded-xl p-5 text-center space-y-3 max-w-sm w-full">
+                      <p className="text-red-300 font-bold text-lg">💀 You died!</p>
+                      <div className="text-4xl font-bold text-gp-mint">
+                        {finalScore.toLocaleString()} pts
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-gp-mint/80">
+                        <div className="bg-gp-bg/40 rounded-lg p-2">
+                          <div className="font-semibold text-gp-mint">📅 Day</div>
+                          <div>{conditions.day}</div>
+                        </div>
+                        <div className="bg-gp-bg/40 rounded-lg p-2">
+                          <div className="font-semibold text-gp-mint">⬆️ Level</div>
+                          <div>{playerLevel}</div>
+                        </div>
+                        <div className="bg-gp-bg/40 rounded-lg p-2">
+                          <div className="font-semibold text-gp-mint">✨ XP</div>
+                          <div>{totalXpGained}</div>
+                        </div>
+                      </div>
+                      {defeatedAnimals.length > 0 && (
+                        <div className="text-xs text-gp-mint/70">
+                          <div className="font-semibold text-gp-mint mb-1">🐾 Animals defeated</div>
+                          <div className="flex flex-wrap justify-center gap-1.5">
+                            {defeatedAnimals.map((a) => (
+                              <span key={a.name} className="px-2 py-0.5 rounded-full bg-gp-bg/40 border border-gp-accent/30">
+                                {a.emoji} {a.name} ×{a.count}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!user && (
+                        <p className="text-gp-mint/50 text-xs">Sign in to save your score to the leaderboard.</p>
+                      )}
+                      <Button variant="primary" size="sm" onClick={onBack} className="w-full">
+                        ↩ Return to lobby
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -545,7 +615,7 @@ export default function App() {
   }
 
   if (activeGame === 'collection') {
-    return <CollectionGame onBack={() => setActiveGame(null)} />;
+    return <CollectionGame onBack={() => setActiveGame(null)} user={user} nickname={nickname} />;
   }
 
   if (activeGame === 'dont-say-it') {

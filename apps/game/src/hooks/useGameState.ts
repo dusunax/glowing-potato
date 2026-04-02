@@ -15,6 +15,7 @@ import { getItemById } from '../data/items';
 import type { GameEvent } from '../types/events';
 import type { ActionCard } from '../types/actionCard';
 import type { PlayerPosition } from '../types/map';
+import type { AnimalRecord } from '../types/score';
 
 const BASE_PLAYER_HP = 10;
 const XP_BASE_TO_NEXT_LEVEL = 12;
@@ -33,6 +34,8 @@ export function useGameState() {
   const [maxPlayerHp, setMaxPlayerHp] = useState(BASE_PLAYER_HP);
   const [isPlayerDead, setIsPlayerDead] = useState(false);
   const maxHpRef = useRef(BASE_PLAYER_HP);
+  const [totalXpGained, setTotalXpGained] = useState(0);
+  const [defeatedAnimals, setDefeatedAnimals] = useState<AnimalRecord[]>([]);
 
   const pushEvent = useCallback((message: string, type: GameEvent['type'] = 'info') => {
     const ev: GameEvent = { id: String(++eventCounter), message, type, timestamp: Date.now() };
@@ -74,6 +77,7 @@ export function useGameState() {
       }
 
       setPlayerXp(nextXp);
+      setTotalXpGained((prev) => prev + amount);
 
       if (levelUps > 0) {
         setPlayerHp(nextMaxHp);
@@ -324,6 +328,13 @@ export function useGameState() {
       if (defeated) {
         gainExperience(experience);
         pushEvent(`Animal defeated: ${animalName} ${animalEmoji}`, 'success');
+        setDefeatedAnimals((prev) => {
+          const existing = prev.find((r) => r.name === animalName);
+          if (existing) {
+            return prev.map((r) => r.name === animalName ? { ...r, count: r.count + 1 } : r);
+          }
+          return [...prev, { name: animalName, emoji: animalEmoji, count: 1 }];
+        });
         addItem('raw_meat');
         addItem('animal_hide');
         markDiscovered('raw_meat');
@@ -355,6 +366,9 @@ export function useGameState() {
     getQuantity,
     canCraft,
     handleCraft,
+    // Stats
+    totalXpGained,
+    defeatedAnimals,
     // Map
     position,
     currentBiomeInfo,
