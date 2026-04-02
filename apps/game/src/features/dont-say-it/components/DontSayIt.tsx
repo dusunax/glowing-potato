@@ -43,13 +43,13 @@ export function DontSayIt({ onBack, nickname, isLoggedIn, onSignIn, onSignOut, o
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-gp-bg p-6">
         <div className="text-center space-y-2">
           <p className="text-4xl">🔒</p>
-          <p className="text-gp-mint font-semibold text-lg">로그인이 필요합니다</p>
-          <p className="text-gp-mint/50 text-sm">Don't Say It을 플레이하려면 로그인해주세요.</p>
+          <p className="text-gp-mint font-semibold text-lg">Login required</p>
+          <p className="text-gp-mint/50 text-sm">Sign in to play Don&apos;t Say It.</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="ghost" size="sm" onClick={onBack}>← 뒤로</Button>
+          <Button variant="ghost" size="sm" onClick={onBack}>← Back</Button>
           {onSignIn && (
-            <Button variant="primary" size="sm" onClick={onSignIn}>Google로 로그인</Button>
+            <Button variant="primary" size="sm" onClick={onSignIn}>Sign in with Google</Button>
           )}
         </div>
       </div>
