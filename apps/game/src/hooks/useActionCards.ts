@@ -1,24 +1,69 @@
 // Hook managing the player's action card hand.
-// Keeps hand size at 3; draws from a shuffled deck, reshuffling discards when empty.
+// Hand size: 4.
+//   Slot 0 → always a move card (explore/sprint)
+//   Slot 1 → always a forage card (forage/lucky_forage/windfall)
+//   Slots 2–3 → skill cards (rest/scout/weather_shift)
 
 import { useState, useCallback } from 'react';
 import type { ActionCard } from '../types/actionCard';
 import { buildDeck, shuffleDeck } from '../data/actionCards';
 
-const HAND_SIZE = 3;
+function isMoveCard(card: ActionCard): boolean {
+  return card.type === 'explore' || card.type === 'sprint';
+}
+
+function isForageCard(card: ActionCard): boolean {
+  return card.type === 'forage' || card.type === 'lucky_forage' || card.type === 'windfall';
+}
+
+const SKILL_HAND_SIZE = 2; // slots 2–3
 
 interface CardState {
-  hand: ActionCard[];
-  deck: ActionCard[];
-  discard: ActionCard[];
+  hand: ActionCard[];        // [move, forage, skill, skill]
+  moveDeck: ActionCard[];
+  moveDiscard: ActionCard[];
+  forageDeck: ActionCard[];
+  forageDiscard: ActionCard[];
+  skillDeck: ActionCard[];
+  skillDiscard: ActionCard[];
+}
+
+export interface PlayCardOptions {
+  preserveCard?: boolean;
+}
+
+function drawOne(
+  deck: ActionCard[],
+  discard: ActionCard[]
+): [ActionCard | null, ActionCard[], ActionCard[]] {
+  if (deck.length > 0) return [deck[0]!, deck.slice(1), discard];
+  if (discard.length > 0) {
+    const reshuffled = shuffleDeck(discard);
+    return [reshuffled[0]!, reshuffled.slice(1), []];
+  }
+  return [null, deck, discard];
 }
 
 function buildInitialState(): CardState {
   const full = shuffleDeck(buildDeck());
+  const moveCards   = shuffleDeck(full.filter(isMoveCard));
+  const forageCards = shuffleDeck(full.filter(isForageCard));
+  const skillCards  = shuffleDeck(full.filter((c) => !isMoveCard(c) && !isForageCard(c)));
+
+  const hand: ActionCard[] = [
+    moveCards[0]!,
+    forageCards[0]!,
+    ...skillCards.slice(0, SKILL_HAND_SIZE),
+  ];
+
   return {
-    hand: full.slice(0, HAND_SIZE),
-    deck: full.slice(HAND_SIZE),
-    discard: [],
+    hand,
+    moveDeck: moveCards.slice(1),
+    moveDiscard: [],
+    forageDeck: forageCards.slice(1),
+    forageDiscard: [],
+    skillDeck: skillCards.slice(SKILL_HAND_SIZE),
+    skillDiscard: [],
   };
 }
 
@@ -26,27 +71,38 @@ export function useActionCards() {
   const [cardState, setCardState] = useState<CardState>(buildInitialState);
   const [selectedCard, setSelectedCard] = useState<ActionCard | null>(null);
 
-  /** Draw one card from a deck array; returns [drawn, remaining]. Reshuffles discards when deck is empty. */
-  function drawOne(deck: ActionCard[], discard: ActionCard[]): [ActionCard | null, ActionCard[], ActionCard[]] {
-    if (deck.length > 0) {
-      return [deck[0]!, deck.slice(1), discard];
+  const playCard = useCallback((cardId: string, options: PlayCardOptions = {}) => {
+    const shouldPreserve = options.preserveCard === true;
+    if (shouldPreserve) {
+      setSelectedCard((prev) => (prev?.id === cardId ? null : prev));
+      return;
     }
-    if (discard.length > 0) {
-      const reshuffled = shuffleDeck(discard);
-      return [reshuffled[0]!, reshuffled.slice(1), []];
-    }
-    return [null, deck, discard];
-  }
 
-  /** Discard a card by id and replace it with the next draw. */
-  const playCard = useCallback((cardId: string) => {
     setCardState((prev) => {
       const cardIndex = prev.hand.findIndex((c) => c.id === cardId);
       if (cardIndex === -1) return prev;
 
       const card = prev.hand[cardIndex]!;
-      const updatedDiscard = [...prev.discard, card];
-      const [drawn, newDeck, newDiscard] = drawOne(prev.deck, updatedDiscard);
+
+      let moveDeck = prev.moveDeck;
+      let moveDiscard = prev.moveDiscard;
+      let forageDeck = prev.forageDeck;
+      let forageDiscard = prev.forageDiscard;
+      let skillDeck = prev.skillDeck;
+      let skillDiscard = prev.skillDiscard;
+
+      let drawn: ActionCard | null;
+
+      if (cardIndex === 0) {
+        moveDiscard = [...moveDiscard, card];
+        [drawn, moveDeck, moveDiscard] = drawOne(moveDeck, moveDiscard);
+      } else if (cardIndex === 1) {
+        forageDiscard = [...forageDiscard, card];
+        [drawn, forageDeck, forageDiscard] = drawOne(forageDeck, forageDiscard);
+      } else {
+        skillDiscard = [...skillDiscard, card];
+        [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard);
+      }
 
       const newHand = [...prev.hand];
       if (drawn) {
@@ -55,15 +111,11 @@ export function useActionCards() {
         newHand.splice(cardIndex, 1);
       }
 
-      return { hand: newHand, deck: newDeck, discard: newDiscard };
+      return { hand: newHand, moveDeck, moveDiscard, forageDeck, forageDiscard, skillDeck, skillDiscard };
     });
     setSelectedCard(null);
   }, []);
 
-  /**
-   * Select a card (for targeted actions like Explore/Sprint).
-   * Calling with the already-selected card toggles it off.
-   */
   const selectCard = useCallback((card: ActionCard | null) => {
     setSelectedCard((prev) => (prev?.id === card?.id ? null : card));
   }, []);
@@ -73,6 +125,6 @@ export function useActionCards() {
     selectedCard,
     selectCard,
     playCard,
-    deckSize: cardState.deck.length,
+    deckSize: cardState.moveDeck.length + cardState.forageDeck.length + cardState.skillDeck.length,
   };
 }

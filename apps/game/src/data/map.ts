@@ -1,26 +1,32 @@
-// Static map data: 5x5 grid of biome types, biome info, and maze passage definitions.
+// Static map data: 8x8 grid of biome types, biome info, and maze passage definitions.
 // No logic — pure data only.
 
 import type { BiomeType, BiomeInfo } from '../types/map';
 import type { PlayerPosition } from '../types/map';
 
 /**
- * 5×5 world map grid. Indexed as MAP_GRID[row (y)][col (x)].
+ * 8×8 world map grid. Indexed as MAP_GRID[row (y)][col (x)].
  *
- *   col: 0         1          2        3        4
- * row 0: mountain  mountain   forest   forest   forest
- * row 1: mountain  lake       forest   meadow   meadow
- * row 2: village   lake       meadow   meadow   plains
- * row 3: plains    plains     meadow   swamp    swamp
- * row 4: beach     beach      plains   swamp    cave
+ *   col: 0         1          2        3        4        5        6        7
+ * row 0: mountain  mountain   forest   forest   forest   meadow   meadow   beach
+ * row 1: mountain  lake       forest   forest   meadow   meadow   plains   beach
+ * row 2: village   lake       meadow   meadow   plains   swamp    swamp    plains
+ * row 3: plains    forest     forest   swamp    swamp    swamp    cave     plains
+ * row 4: plains    plains     meadow   plains    beach    beach    plains   plains
+ * row 5: forest    plains     plains   meadow   meadow   cave     mountain mountain
+ * row 6: forest    forest     meadow   lake     lake     plains   plains   cave
+ * row 7: beach     beach      plains   swamp    mountain cave     cave     cave
  */
 // prettier-ignore
 export const MAP_GRID: BiomeType[][] = [
-  ['mountain', 'mountain', 'forest', 'forest', 'forest'],
-  ['mountain', 'lake',     'forest', 'meadow', 'meadow'],
-  ['village',  'lake',     'meadow', 'meadow', 'plains'],
-  ['plains',   'plains',   'meadow', 'swamp',  'swamp'],
-  ['beach',    'beach',    'plains', 'swamp',  'cave'],
+  ['mountain', 'mountain', 'forest',  'forest',  'forest',  'meadow',  'meadow',  'beach'],
+  ['mountain', 'lake',     'forest',  'forest',  'meadow',  'meadow',  'plains',  'beach'],
+  ['village',  'lake',     'meadow',  'meadow',  'plains',  'swamp',   'swamp',   'plains'],
+  ['plains',   'forest',   'forest',  'swamp',   'swamp',   'swamp',   'cave',    'plains'],
+  ['plains',   'plains',   'meadow',  'plains',  'beach',   'beach',   'plains',  'plains'],
+  ['forest',   'plains',   'plains',  'meadow',  'meadow',  'cave',    'mountain', 'mountain'],
+  ['forest',   'forest',   'meadow',  'lake',    'lake',    'plains',  'plains',  'cave'],
+  ['beach',    'beach',    'plains',  'swamp',   'mountain','cave',    'cave',    'cave'],
 ];
 
 export const MAP_ROWS = MAP_GRID.length;
@@ -34,28 +40,25 @@ export const INITIAL_PLAYER_POSITION: PlayerPosition = { x: 0, y: 2 }; // Villag
 //   Horizontal: `h:${x},${y}` = open passage between (x,y) and (x+1,y)
 //   Vertical:   `v:${x},${y}` = open passage between (x,y) and (x,y+1)
 //
-// This set was hand-crafted to form a valid connected maze (all 25 cells
-// reachable from the starting village at (0,2)).  There are 3 extra edges
-// beyond a spanning tree to give the maze a few cycles.
+// Legacy maze data for when USE_MAZE_WALLS is true.
+
+const USE_MAZE_WALLS = false;
 
 export const MAZE_PASSAGES = new Set<string>([
-  // Horizontal edges  (x,y)↔(x+1,y)
-  'h:0,0', 'h:2,0', 'h:3,0',          // row 0
-  'h:1,1', 'h:3,1',                    // row 1
-  'h:0,2', 'h:2,2',                    // row 2
-  'h:0,3', 'h:2,3', 'h:3,3',          // row 3
-  'h:0,4', 'h:2,4',                    // row 4
-
-  // Vertical edges  (x,y)↔(x,y+1)
-  'v:0,1', 'v:0,2', 'v:0,3',          // col 0
-  'v:1,0', 'v:1,1', 'v:1,3',          // col 1
-  'v:2,0', 'v:2,1', 'v:2,2', 'v:2,3', // col 2
-  'v:3,0', 'v:3,1', 'v:3,3',          // col 3
-  'v:4,0', 'v:4,2', 'v:4,3',          // col 4
+  // Fill as needed when maze walls are enabled.
 ]);
 
 /** Returns true if there is an open maze passage between the two orthogonally-adjacent tiles. */
 export function hasPassage(x1: number, y1: number, x2: number, y2: number): boolean {
+  if (!USE_MAZE_WALLS) {
+    const dx = Math.abs(x1 - x2);
+    const dy = Math.abs(y1 - y2);
+    return dx + dy === 1;
+  }
+
+  const dx = Math.abs(x1 - x2);
+  const dy = Math.abs(y1 - y2);
+  if (dx + dy !== 1) return false;
   if (y1 === y2) {
     const lx = Math.min(x1, x2);
     return MAZE_PASSAGES.has(`h:${lx},${y1}`);

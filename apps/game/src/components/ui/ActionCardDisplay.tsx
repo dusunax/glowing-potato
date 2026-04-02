@@ -1,5 +1,6 @@
 // Displays a single action card in the player's hand.
 
+import type { CSSProperties } from 'react';
 import type { ActionCard } from '../../types/actionCard';
 import { Badge } from '@glowing-potato/ui';
 
@@ -7,12 +8,24 @@ interface ActionCardDisplayProps {
   card: ActionCard;
   isSelected: boolean;
   onClick: () => void;
+  className?: string;
+  style?: CSSProperties;
 }
 
-const RARITY_BORDER: Record<string, string> = {
-  common: 'border-gp-accent/40',
-  uncommon: 'border-emerald-400/50',
-  rare: 'border-amber-400/60',
+import type { ActionCardType } from '../../types/actionCard';
+
+// Movement cards: explore/sprint — blue
+// Forage cards: forage/lucky_forage/windfall — green
+// Skill cards: rest/scout/weather_shift — purple
+const TYPE_THEME: Record<ActionCardType, { base: string; selected: string; border: string }> = {
+  explore:       { base: 'bg-[#295d9e]',   selected: 'bg-blue-900 ring-blue-400',   border: 'border-[#295d9e]/40' },
+  sprint:        { base: 'bg-[#295d9e]',   selected: 'bg-blue-900 ring-blue-400',   border: 'border-[#295d9e]/40' },
+  forage:        { base: 'bg-[#684213]', selected: 'bg-orange-900 ring-orange-400', border: 'border-[#684213]/40' },
+  lucky_forage:  { base: 'bg-[#684213]', selected: 'bg-orange-900 ring-orange-400', border: 'border-[#684213]/40' },
+  windfall:      { base: 'bg-[#684213]', selected: 'bg-orange-900 ring-orange-400', border: 'border-[#684213]/40' },
+  rest:          { base: 'bg-[#443352]', selected: 'bg-violet-900 ring-violet-400', border: 'border-[#443352]/40' },
+  scout:         { base: 'bg-[#443352]', selected: 'bg-violet-900 ring-violet-400', border: 'border-[#443352]/40' },
+  weather_shift: { base: 'bg-[#443352]', selected: 'bg-violet-900 ring-violet-400', border: 'border-[#443352]/40' },
 };
 
 const RARITY_BADGE: Record<string, 'muted' | 'success' | 'warning'> = {
@@ -21,32 +34,39 @@ const RARITY_BADGE: Record<string, 'muted' | 'success' | 'warning'> = {
   rare: 'warning',
 };
 
-export function ActionCardDisplay({ card, isSelected, onClick }: ActionCardDisplayProps) {
-  const borderClass = RARITY_BORDER[card.rarity] ?? 'border-gp-accent/40';
+export function ActionCardDisplay({ card, isSelected, onClick, className = '', style }: ActionCardDisplayProps) {
+  const theme = TYPE_THEME[card.type];
   const badgeVariant = RARITY_BADGE[card.rarity] ?? 'muted';
 
   return (
-    <button
-      onClick={onClick}
-      className={[
-        'flex flex-col items-center gap-2 p-4 rounded-xl border text-center w-full',
-        'transition-all duration-200 cursor-pointer focus-visible:outline-none',
-        'focus-visible:ring-2 focus-visible:ring-gp-mint/50',
-        borderClass,
-        isSelected
-          ? 'bg-gp-accent/30 ring-2 ring-gp-mint scale-[1.04] shadow-lg'
-          : 'bg-gp-surface/60 hover:bg-gp-surface hover:scale-[1.02]',
-      ].join(' ')}
-      aria-pressed={isSelected}
-    >
-      <span className="text-3xl">{card.emoji}</span>
-      <div className="flex-1">
-        {/* font-semibold text-gp-mint on gp-surface: ~5.5:1 ✓ */}
-        <div className="font-semibold text-gp-mint text-sm leading-tight">{card.name}</div>
-        {/* text-gp-mint/70 on gp-surface: ~3.65:1 — acceptable for small hint text ✓ */}
-        <div className="text-xs text-gp-mint/70 mt-1 leading-snug">{card.description}</div>
-      </div>
-      <Badge label={card.rarity} variant={badgeVariant} />
-    </button>
+    <div className='h-full'>
+      <div className='absolute inset-0 rounded-xl ring-1 ring-gp-mint -top-1.5 bg-black pointer-events-none' />
+      <div className='absolute inset-0 rounded-xl ring-1 ring-gp-mint -top-1 bg-black pointer-events-none' />
+      <div className='absolute inset-0 rounded-xl ring-1 ring-gp-mint -top-0.5 bg-black pointer-events-none' />
+      <button
+        onClick={onClick}
+        style={style}
+        className={[
+          'flex flex-col h-full gap-1 p-4 rounded-xl border w-full relative z-1 ',
+          'transition-all duration-200 cursor-pointer focus-visible:outline-none',
+          'focus-visible:ring-2 focus-visible:ring-gp-mint',
+          theme.border,
+          isSelected
+          ? `${theme.selected} ring-2 scale-[1.04] shadow-lg`
+          : `${theme.base} hover:-top-0.5`,
+          className,
+        ].join(' ')}
+        aria-pressed={isSelected}
+        >
+        <span className="text-3xl text-left">{card.emoji}</span>
+        <div className="flex-1">
+          {/* font-semibold text-gp-mint on gp-surface: ~5.5:1 ✓ */}
+          <div className="font-semibold text-gp-mint text-sm leading-tight text-left">{card.name}</div>
+          {/* text-gp-mint/70 on gp-surface: ~3.65:1 — acceptable for small hint text ✓ */}
+          <div className="text-xs text-gp-mint/70 mt-1 text-left">{card.description}</div>
+        </div>
+        <Badge label={card.rarity} variant={badgeVariant} className='justify-center' />
+      </button>
+    </div>
   );
 }

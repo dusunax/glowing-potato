@@ -2,7 +2,7 @@
 // mini-game when the player selects one.
 // Does not contain game logic — delegates to hooks and child components.
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { GameLobby } from './components/GameLobby';
 import { useGameState } from './hooks/useGameState';
 import { useAuth } from './hooks/useAuth';
@@ -17,6 +17,7 @@ import { Button } from '@glowing-potato/ui';
 import { TIME_PERIOD_EMOJIS } from './constants/timePeriods';
 import { WEATHER_EMOJIS } from './constants/weather';
 import { getSeasonColor } from './utils/time';
+import { getItemById } from './data/items';
 import { tileKey } from './hooks/useMap';
 import type { ActionCard } from './types/actionCard';
 
@@ -31,11 +32,44 @@ function CondPill({ emoji, label, labelClass = '' }: { emoji: string; label: str
   );
 }
 
+function getCardStackTheme(type: ActionCard['type']) {
+  switch (type) {
+    case 'explore':
+    case 'sprint':
+      return {
+        layer1: 'bg-blue-900',
+        layer2: 'bg-blue-800',
+        layer3: 'bg-blue-700',
+        border: 'border-blue-600',
+      };
+    case 'forage':
+    case 'lucky_forage':
+    case 'windfall':
+      return {
+        layer1: 'bg-orange-900',
+        layer2: 'bg-orange-800',
+        layer3: 'bg-orange-700',
+        border: 'border-orange-600',
+      };
+    case 'rest':
+    case 'scout':
+    case 'weather_shift':
+    default:
+      return {
+        layer1: 'bg-violet-900',
+        layer2: 'bg-violet-800',
+        layer3: 'bg-violet-700',
+        border: 'border-violet-600',
+      };
+  }
+}
+
 // ── Collection game screen ────────────────────────────────────────────────────
 
-type Tab = 'inventory' | 'crafting' | 'discovery' | 'spawnable';
+type Tab = 'game' | 'inventory' | 'crafting' | 'discovery' | 'spawnable';
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'game',       label: '🧭 Game' },
   { id: 'inventory',  label: '🎒 Inventory' },
   { id: 'crafting',   label: '⚗️ Crafting' },
   { id: 'discovery',  label: '📖 Discovery' },
@@ -47,6 +81,10 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
     conditions,
     playerHp,
     maxPlayerHp,
+    playerLevel,
+    playerXp,
+    xpToNextLevel,
+    isPlayerDead,
     inventory,
     discovered,
     events,
@@ -63,32 +101,38 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
     getReachableTiles,
     getAnimalsAt,
     getAdjacentAnimals,
+    animals,
     hand,
     selectedCard,
     selectCard,
     handlePlayCard,
+    handleStrike,
+    handleUseItem,
     deckSize,
   } = useGameState();
 
-  const [activeTab, setActiveTab] = useState<Tab>('inventory');
+  const BELT_SLOT_COUNT = 8;
+  const [activeTab, setActiveTab] = useState<Tab | null>(null);
+  const [beltSlots, setBeltSlots] = useState<(string | null)[]>(() =>
+    Array.from({ length: BELT_SLOT_COUNT }, () => null as string | null)
+  );
+  const [selectedBeltSlot, setSelectedBeltSlot] = useState(0);
 
   const seasonColorClass = getSeasonColor(conditions.season);
+  const activeTabIndex = activeTab ? TABS.findIndex((tab) => tab.id === activeTab) : 0;
+  const adjacentAnimals = useMemo(() => getAdjacentAnimals(position), [getAdjacentAnimals, position, animals]);
 
-  // Compute adjacent animals for attack targeting
-  const adjacentAnimals = useMemo(() => getAdjacentAnimals(position), [getAdjacentAnimals, position]);
-
-  // Build the set of attack-target tiles (adjacent tiles that have an alive animal)
-  const attackTargetTiles = useMemo(() => {
-    if (selectedCard?.type !== 'attack') return new Set<string>();
+  const nearbyAnimals = useMemo(() => {
     const tiles = new Set<string>();
     for (const a of adjacentAnimals) {
       tiles.add(tileKey(a.position.x, a.position.y));
     }
     return tiles;
-  }, [selectedCard, adjacentAnimals]);
+  }, [adjacentAnimals]);
 
   function onCardClick(card: ActionCard) {
-    if (card.type === 'explore' || card.type === 'sprint' || card.type === 'attack') {
+    if (isPlayerDead) return;
+    if (card.type === 'explore' || card.type === 'sprint') {
       // Toggle selection — requires a map tile target
       selectCard(card);
     } else {
@@ -98,23 +142,254 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
   }
 
   function onTileClick(x: number, y: number) {
+    if (isPlayerDead) return;
+    const target = adjacentAnimals.find((a) => a.position.x === x && a.position.y === y);
+    if (target) {
+      handleStrike(target.id);
+      return;
+    }
+
     if (!selectedCard) return;
     if (selectedCard.type === 'explore' || selectedCard.type === 'sprint') {
       handlePlayCard(selectedCard, { x, y });
-    } else if (selectedCard.type === 'attack') {
-      // Find animal on that tile
-      const target = adjacentAnimals.find((a) => a.position.x === x && a.position.y === y);
-      if (target) handlePlayCard(selectedCard, undefined, target.id);
     }
   }
 
   const isTargetingCard = selectedCard && (
-    selectedCard.type === 'explore' || selectedCard.type === 'sprint' || selectedCard.type === 'attack'
+    selectedCard.type === 'explore' || selectedCard.type === 'sprint'
   );
+  const canUseItem = useCallback((itemId: string) => {
+    const item = getItemById(itemId);
+    const tags = item?.tags ?? [];
+    return tags.includes('cooking') || tags.includes('potion');
+  }, []);
+
+  const beltSlotData = useMemo(() => {
+    const quantityByItemId = new Map(inventory.map((slot) => [slot.itemId, slot.quantity]));
+    return beltSlots.map((slotItemId) => {
+      if (!slotItemId) return undefined;
+      const quantity = quantityByItemId.get(slotItemId) ?? 0;
+      if (quantity <= 0) return undefined;
+      return { itemId: slotItemId, quantity };
+    });
+  }, [beltSlots, inventory]);
+
+  const canAssignSlot = useCallback(
+    (slotIndex: number, itemId: string) => {
+      if (!canUseItem(itemId)) return false;
+      const stock = getQuantity(itemId);
+      if (stock <= 0) return false;
+      const alreadyUsed = beltSlots.reduce((total, assignedItemId, i) => {
+        if (assignedItemId === itemId && i !== slotIndex) return total + 1;
+        return total;
+      }, 0);
+      return alreadyUsed < stock;
+    },
+    [beltSlots, canUseItem, getQuantity]
+  );
+
+  const handleSelectBeltSlot = useCallback((slotIndex: number) => {
+    if (slotIndex < 0 || slotIndex >= BELT_SLOT_COUNT) return;
+    setSelectedBeltSlot(slotIndex);
+  }, []);
+
+  const handleAssignBeltSlot = useCallback((slotIndex: number, itemId: string) => {
+    if (!canAssignSlot(slotIndex, itemId)) return;
+    setBeltSlots((prev) => {
+      const next = [...prev];
+      next[slotIndex] = itemId;
+      return next;
+    });
+  }, [canAssignSlot]);
+
+  const handleClearBeltSlot = useCallback((slotIndex: number) => {
+    setBeltSlots((prev) => {
+      if (slotIndex < 0 || slotIndex >= prev.length) return prev;
+      const next = [...prev];
+      next[slotIndex] = null;
+      return next;
+    });
+  }, []);
+
+  function handleBeltUse(itemId: string) {
+    if (isPlayerDead) return;
+    const stock = getQuantity(itemId);
+    if (stock <= 0) return;
+    handleUseItem(itemId);
+  }
+
+  const eventLog = useMemo(() => [...events].reverse(), [events]);
+
+  const emptySlotClass = 'min-h-[64px] border border-dashed border-gp-mint/55 rounded-lg';
+  const emptySlotStyle = {
+    background: 'linear-gradient(180deg, rgba(var(--gp-bg), 0.82) 0%, rgba(var(--gp-bg), 0.65) 100%)',
+    boxShadow: 'inset 0 0 0 1px rgba(var(--gp-accent), 0.25)',
+  };
 
   // HP bar colour
   const hpRatio = playerHp / maxPlayerHp;
   const hpColor = hpRatio > 0.6 ? 'bg-emerald-400' : hpRatio > 0.3 ? 'bg-amber-400' : 'bg-red-500';
+  const gamePanel = (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
+      <div className="flex flex-col gap-3">
+        <MapPanel
+          position={position}
+          selectedCard={selectedCard}
+          onTileClick={onTileClick}
+          currentBiomeInfo={currentBiomeInfo}
+          canMoveTo={canMoveTo}
+          visitedTiles={visitedTiles}
+          knownTiles={knownTiles}
+          getTileResources={getTileResources}
+          getAnimalsAt={getAnimalsAt}
+          getReachableTiles={getReachableTiles}
+          nearbyAnimalTiles={nearbyAnimals}
+        />
+
+        <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gp-mint">🎒 Belt</h3>
+            <span className="text-xs text-gp-mint/70">Quick Use</span>
+          </div>
+        <div className="grid grid-cols-8 gap-2">
+            {beltSlotData.map((slot, index) => {
+              if (!slot) {
+                return (
+                  <button
+                    key={`belt-empty-${index}`}
+                    type="button"
+                    className="relative min-h-12 rounded-lg border border-gp-accent/30 transition-colors bg-gp-bg/20 hover:border-gp-accent/50"
+                  >
+                    <span className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">#{index + 1}</span>
+                      <div className={`${emptySlotClass}`} style={emptySlotStyle} />
+                  </button>
+                );
+              }
+
+              const item = getItemById(slot.itemId);
+              if (!item) return (
+                <div
+                  key={`belt-invalid-${slot.itemId}-${index}`}
+                  className={emptySlotClass}
+                  style={emptySlotStyle}
+                />
+              );
+
+              const canUse = canUseItem(slot.itemId);
+              return (
+                <button
+                  key={`belt-slot-${index}-${slot.itemId}`}
+                  onClick={() => handleBeltUse(slot.itemId)}
+                  disabled={!canUse || isPlayerDead}
+                  title={item.name}
+                  className={`relative h-14 rounded-lg border ${canUse && !isPlayerDead ? 'border-gp-accent/60 bg-gp-bg/40 hover:border-gp-accent' : 'border-gp-accent/25 bg-gp-bg/20 opacity-60'} transition-colors`}
+                >
+                  <span className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">#{index + 1}</span>
+                  <div className="absolute inset-x-2 top-1 text-2xl leading-none text-center">{item.emoji}</div>
+                  <div className="absolute bottom-1 left-1 right-1 flex justify-between items-end">
+                    <span className="text-[11px] text-gp-mint/90 truncate">{item.name}</span>
+                    <span className="text-xs text-gp-mint font-semibold">×{slot.quantity}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gp-mint text-lg">🃏 Action Cards</h2>
+            <span className="text-xs text-gp-mint/60">{deckSize} left in deck</span>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            {hand.map((card, index) => {
+              const isSelected = selectedCard?.id === card.id;
+              const stackTheme = getCardStackTheme(card.type);
+              return (
+                <div key={card.id} className="relative min-h-[13rem]">
+                  <div
+                    className={`pointer-events-none absolute left-2 top-2 right-0 rounded-xl border ${stackTheme.border} ${stackTheme.layer1} h-full -z-20 rotate-3`}
+                  />
+                  <div
+                    className={`pointer-events-none absolute left-1 top-1 right-1 rounded-xl border ${stackTheme.border} ${stackTheme.layer2} h-full -z-10 rotate-1`}
+                  />
+                  <div
+                    className={`pointer-events-none absolute left-0.5 top-0.5 right-0.5 rounded-xl border ${stackTheme.border} ${stackTheme.layer3} h-full -z-0 rotate-[0.25deg]`}
+                  />
+                  <ActionCardDisplay
+                    card={card}
+                    isSelected={isSelected}
+                    onClick={() => onCardClick(card)}
+                    className={isPlayerDead ? 'opacity-60' : ''}
+                    style={{ zIndex: isSelected ? 30 : 10 - index }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {isTargetingCard && (
+            <div className="mt-3 flex items-center justify-center gap-3">
+              <p className="text-xs text-gp-mint/70">
+                Click a highlighted tile on the map to move there
+              </p>
+              <Button variant="ghost" size="sm" onClick={() => selectCard(null)}>
+                Cancel
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {adjacentAnimals.length > 0 && (
+          <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-3">
+            <h3 className="text-sm font-semibold text-red-300 mb-2">⚠️ Nearby Animals</h3>
+            <div className="flex flex-wrap gap-2">
+              {adjacentAnimals.map((a) => (
+                <div key={a.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gp-bg/40 border border-red-500/20">
+                  <span>{a.emoji}</span>
+                  <span className="text-xs text-gp-mint/85">{a.name}</span>
+                  <span className={`text-xs font-bold ${a.behavior === 'hostile' ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {a.behavior === 'hostile' ? '⚔️' : '🕊️'}
+                  </span>
+                  <span className="text-xs text-gp-mint/60">{a.hp}/{a.maxHp}HP</span>
+                  <Button size="sm" variant="ghost" onClick={() => handleStrike(a.id)} disabled={isPlayerDead}>
+                    Attack
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex-1">
+          <h2 className="font-semibold text-gp-mint text-lg mb-3">📋 Event Log</h2>
+          {events.length === 0 ? (
+            <p className="text-gp-mint/85 text-sm">
+              No events yet. Play a card to start!
+            </p>
+          ) : (
+            <div className="space-y-1.5 overflow-y-auto">
+              {eventLog.map((ev) => (
+                <div
+                  key={ev.id}
+                  className={`text-sm px-3 py-1.5 rounded-lg ${
+                    ev.type === 'success'
+                      ? 'bg-gp-accent/20 text-gp-mint'
+                      : ev.type === 'warning'
+                      ? 'bg-amber-900/40 text-amber-200'
+                      : 'bg-gp-bg/40 text-gp-mint'
+                  }`}
+                >
+                  {ev.message}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gp-bg flex flex-col">
@@ -135,6 +410,7 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
             {/* Player HP */}
             <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gp-bg/40 border border-gp-accent/20">
               <span>❤️</span>
+              <span className="text-xs font-semibold text-gp-mint">Lv {playerLevel}</span>
               <div className="flex items-center gap-1">
                 <div className="w-14 h-2 bg-gp-bg/60 rounded-full overflow-hidden">
                   <div
@@ -144,6 +420,10 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
                 </div>
                 <span className="text-xs font-semibold text-gp-mint">{playerHp}/{maxPlayerHp}</span>
               </div>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gp-bg/40 border border-gp-accent/20">
+              <span>⭐</span>
+              <span className="text-xs text-gp-mint">{playerXp}/{xpToNextLevel} XP</span>
             </div>
           </div>
 
@@ -156,132 +436,82 @@ function CollectionGame({ onBack }: { onBack: () => void }) {
       </header>
 
       {/* ── Main content ─────────────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 space-y-4">
-
-        {/* Top row: Map + Cards/Log */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          {/* World map */}
-          <MapPanel
-            position={position}
-            selectedCard={selectedCard}
-            onTileClick={onTileClick}
-            currentBiomeInfo={currentBiomeInfo}
-            canMoveTo={canMoveTo}
-            visitedTiles={visitedTiles}
-            knownTiles={knownTiles}
-            getTileResources={getTileResources}
-            getAnimalsAt={getAnimalsAt}
-            getReachableTiles={getReachableTiles}
-            attackTargetTiles={attackTargetTiles}
-          />
-
-          {/* Right column: action cards + event log */}
-          <div className="flex flex-col gap-4">
-
-            {/* ── Action card hand ─────────────────────────────────────────── */}
-            <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-semibold text-gp-mint text-lg">🃏 Action Cards</h2>
-                <span className="text-xs text-gp-mint/60">{deckSize} left in deck</span>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {hand.map((card) => (
-                  <ActionCardDisplay
-                    key={card.id}
-                    card={card}
-                    isSelected={selectedCard?.id === card.id}
-                    onClick={() => onCardClick(card)}
-                  />
-                ))}
-              </div>
-              {isTargetingCard && (
-                <div className="mt-3 flex items-center justify-center gap-3">
-                  <p className="text-xs text-gp-mint/70">
-                    {selectedCard.type === 'attack'
-                      ? 'Click an adjacent animal tile to attack'
-                      : 'Click a highlighted tile on the map to move there'}
-                  </p>
-                  <Button variant="ghost" size="sm" onClick={() => selectCard(null)}>
-                    Cancel
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* ── Nearby animals ───────────────────────────────────────────── */}
-            {adjacentAnimals.length > 0 && (
-              <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-3">
-                <h3 className="text-sm font-semibold text-red-300 mb-2">⚠️ Nearby Animals</h3>
-                <div className="flex flex-wrap gap-2">
-                  {adjacentAnimals.map((a) => (
-                    <div key={a.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gp-bg/40 border border-red-500/20">
-                      <span>{a.emoji}</span>
-                      <span className="text-xs text-gp-mint/85">{a.name}</span>
-                      <span className={`text-xs font-bold ${a.behavior === 'hostile' ? 'text-red-400' : 'text-emerald-400'}`}>
-                        {a.behavior === 'hostile' ? '⚔️' : '🕊️'}
-                      </span>
-                      <span className="text-xs text-gp-mint/60">{a.hp}/{a.maxHp}HP</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Event log ────────────────────────────────────────────────── */}
-            <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex-1">
-              <h2 className="font-semibold text-gp-mint text-lg mb-3">📋 Event Log</h2>
-              {events.length === 0 ? (
-                <p className="text-gp-mint/85 text-sm">
-                  No events yet. Play a card to start!
-                </p>
-              ) : (
-                <div className="space-y-1.5 overflow-y-auto max-h-44">
-                  {events.map((ev) => (
-                    <div
-                      key={ev.id}
-                      className={`text-sm px-3 py-1.5 rounded-lg ${
-                        ev.type === 'success'
-                          ? 'bg-gp-accent/20 text-gp-mint'
-                          : ev.type === 'warning'
-                          ? 'bg-amber-900/40 text-amber-200'
-                          : 'bg-gp-bg/40 text-gp-mint'
-                      }`}
-                    >
-                      {ev.message}
-                    </div>
-                  ))}
-                </div>
-              )}
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 space-y-4 flex flex-col min-h-0">
+        <div className="bg-gp-surface border border-gp-accent/30 rounded-xl overflow-hidden shadow-lg shadow-black/20 flex-1 min-h-0 flex flex-col">
+          <div className="relative px-1.5 py-1.5 border-b border-gp-accent/30">
+            <div
+              className="relative rounded-lg bg-black/20 p-1"
+              style={{ display: 'grid', gridTemplateColumns: `repeat(${TABS.length}, minmax(0, 1fr))`, gap: '0.25rem' }}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-1 rounded-md bg-gp-mint/25 border border-gp-mint/40 transition-transform duration-300"
+                style={{
+                  width: `calc(100% / ${TABS.length})`,
+                  transform: `translateX(${activeTabIndex * 100}%)`,
+                }}
+              />
+              {TABS.map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab((prev) => (prev === id ? null : id))}
+                  className={[
+                    'relative z-10 py-2 px-2 text-xs md:text-sm font-semibold rounded-md transition-colors duration-200',
+                    activeTab === id
+                      ? 'text-gp-mint'
+                      : 'text-gp-mint/65 hover:text-gp-mint',
+                  ].join(' ')}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-
-        {/* ── Tabbed bottom panels ──────────────────────────────────────────── */}
-        <div className="bg-gp-surface border border-gp-accent/30 rounded-xl overflow-hidden">
-          <div className="flex border-b border-gp-accent/30 overflow-x-auto">
-            {TABS.map(({ id, label }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={[
-                  'px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors flex-1 min-w-0',
-                  activeTab === id
-                    ? 'text-gp-mint bg-gp-accent/20 border-b-2 border-gp-mint'
-                    : 'text-gp-mint/60 hover:text-gp-mint hover:bg-gp-accent/10',
-                ].join(' ')}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="p-4 min-h-40">
-            {activeTab === 'inventory' && <InventoryPanel inventory={inventory} />}
-            {activeTab === 'crafting' && (
-              <CraftingPanel recipes={recipes} canCraft={canCraft} onCraft={handleCraft} getQuantity={getQuantity} />
-            )}
-            {activeTab === 'discovery' && <DiscoveryPanel discovered={discovered} />}
-            {activeTab === 'spawnable' && <SpawnPanel conditions={conditions} />}
+          <div
+            className={`transition-all duration-300 flex-1 min-h-0 flex flex-col`}
+          >
+            <div className="p-4 transition-all duration-300 transform flex-1 min-h-0 flex flex-col">
+              <div className="overflow-hidden flex-1 min-h-0 flex relative">
+                {isPlayerDead && (
+                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-gp-bg/70 p-4">
+                    <div className="bg-gp-surface border border-red-500/40 rounded-xl p-5 text-center space-y-3">
+                      <p className="text-red-300 font-bold">💀 You died!</p>
+                      <p className="text-gp-mint/80 text-sm">You are defeated. Return to lobby to start over.</p>
+                    </div>
+                  </div>
+                )}
+                <div
+                  className="flex transition-transform duration-300 ease-out h-full"
+                  style={{
+                    transform: `translateX(-${activeTabIndex * 100}%)`,
+                  }}
+                >
+                  <section className="w-full shrink-0">
+                    {gamePanel}
+                  </section>
+                  <section className="w-full shrink-0">
+                    <InventoryPanel
+                      inventory={inventory}
+                      beltSlots={beltSlots}
+                      selectedBeltSlot={selectedBeltSlot}
+                      onSelectBeltSlot={handleSelectBeltSlot}
+                      onAssignToBelt={handleAssignBeltSlot}
+                      onClearBeltSlot={handleClearBeltSlot}
+                      canUseInBelt={canUseItem}
+                    />
+                  </section>
+                  <section className="w-full shrink-0">
+                    <CraftingPanel recipes={recipes} canCraft={canCraft} onCraft={handleCraft} getQuantity={getQuantity} />
+                  </section>
+                  <section className="w-full shrink-0">
+                    <DiscoveryPanel discovered={discovered} />
+                  </section>
+                  <section className="w-full shrink-0">
+                    <SpawnPanel conditions={conditions} />
+                  </section>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -302,7 +532,7 @@ export default function App() {
       await signInWithGoogle();
     } catch (e: unknown) {
       if (e instanceof Error && e.message.includes('popup-closed')) return;
-      setSignInError('로그인에 실패했어요. 다시 시도해주세요.');
+      setSignInError('Sign in failed. Please try again.');
     }
   }
 

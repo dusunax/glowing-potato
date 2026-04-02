@@ -65,13 +65,6 @@ const CARD_TEMPLATES: CardTemplate[] = [
     emoji: '💨',
     rarity: 'rare',
   },
-  {
-    type: 'attack',
-    name: 'Strike',
-    description: 'Attack an adjacent animal. Select a target tile.',
-    emoji: '⚔️',
-    rarity: 'common',
-  },
 ];
 
 /** Number of copies per rarity in the deck. */

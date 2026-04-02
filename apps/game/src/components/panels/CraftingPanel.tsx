@@ -15,7 +15,7 @@ export function CraftingPanel({ recipes, canCraft, onCraft, getQuantity }: Craft
   return (
     <div className="flex flex-col">
       <CardTitle className="mb-3">⚗️ Crafting</CardTitle>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto max-h-72">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto">
         {recipes.map((recipe) => (
           <RecipeCard
             key={recipe.id}

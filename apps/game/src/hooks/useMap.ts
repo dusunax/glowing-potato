@@ -23,7 +23,8 @@ function buildInitialResources(): Record<string, number> {
   const res: Record<string, number> = {};
   for (let y = 0; y < MAP_ROWS; y++) {
     for (let x = 0; x < MAP_COLS; x++) {
-      res[tileKey(x, y)] = randomResources();
+      const isCave = MAP_GRID[y]?.[x] === 'cave';
+      res[tileKey(x, y)] = isCave ? 0 : randomResources();
     }
   }
   return res;
@@ -37,9 +38,11 @@ export function useMap() {
     () => new Set([tileKey(INITIAL_PLAYER_POSITION.x, INITIAL_PLAYER_POSITION.y)])
   );
 
-  // Per-tile resource limits (1–3 per tile) — stored in a ref for synchronous reads
+  // Resource caps are fixed per tile (1–3 per tile), and current resources are tracked separately.
+  const tileResourceCapsRef = useRef<Record<string, number>>(buildInitialResources());
+  // Per-tile resource values are stored in a ref for synchronous reads
   // and shadowed in state to drive re-renders.
-  const tileResourcesRef = useRef<Record<string, number>>(buildInitialResources());
+  const tileResourcesRef = useRef<Record<string, number>>({ ...tileResourceCapsRef.current });
   // The state counter exists solely to trigger re-renders when resources are consumed.
   const [, setTileResourcesVersion] = useState(0);
 
@@ -68,13 +71,44 @@ export function useMap() {
     []
   );
 
+  /**
+   * Shortest path length (in maze steps) between two in-bounds tiles.
+   * Returns -1 if target is unreachable.
+   */
+  const getPathLength = useCallback((from: PlayerPosition, to: PlayerPosition): number => {
+    if (
+      from.x < 0 || from.x >= MAP_COLS || from.y < 0 || from.y >= MAP_ROWS ||
+      to.x < 0 || to.x >= MAP_COLS || to.y < 0 || to.y >= MAP_ROWS
+    ) {
+      return -1;
+    }
+
+    if (from.x === to.x && from.y === to.y) return 0;
+
+    const queue: Array<{ pos: PlayerPosition; steps: number }> = [{ pos: from, steps: 0 }];
+    const seen = new Set<string>([tileKey(from.x, from.y)]);
+
+    while (queue.length > 0) {
+      const { pos, steps } = queue.shift()!;
+      for (const nb of getMazeNeighbors(pos.x, pos.y)) {
+        const k = tileKey(nb.x, nb.y);
+        if (seen.has(k)) continue;
+        if (nb.x === to.x && nb.y === to.y) return steps + 1;
+        seen.add(k);
+        queue.push({ pos: nb, steps: steps + 1 });
+      }
+    }
+
+    return -1;
+  }, []);
+
   /** True if tile (x, y) can be reached within `range` maze steps from current position. */
   const canMoveTo = useCallback(
     (x: number, y: number, range = 1): boolean => {
-      const reachable = getReachableTiles(position, range);
-      return reachable.has(tileKey(x, y));
+      const target = getPathLength(position, { x, y });
+      return target !== -1 && target <= range;
     },
-    [position, getReachableTiles]
+    [position, getPathLength]
   );
 
   /** Returns whether there is a direct maze passage between current tile and (x,y). */
@@ -86,6 +120,7 @@ export function useMap() {
 
   const moveTo = useCallback(
     (x: number, y: number): boolean => {
+      if (getPathLength(position, { x, y }) === -1) return false;
       if (x < 0 || x >= MAP_COLS || y < 0 || y >= MAP_ROWS) return false;
       setPosition({ x, y });
       setVisitedTiles((prev) => {
@@ -95,7 +130,7 @@ export function useMap() {
       });
       return true;
     },
-    []
+    [getPathLength, position]
   );
 
   /** Consumes one resource from tile (x, y). Returns the remaining count after consumption.
@@ -120,18 +155,30 @@ export function useMap() {
     []
   );
 
+  /** Replenish all tiles to their initial cap (recharges every 7 days). */
+  const replenishTileResources = useCallback(() => {
+    tileResourcesRef.current = { ...tileResourceCapsRef.current };
+    setTileResourcesVersion((v) => v + 1);
+  }, []);
+
   const currentBiomeType = MAP_GRID[position.y][position.x];
   const currentBiomeInfo = BIOME_INFO[currentBiomeType];
 
-  /** Tiles the player hasn't visited but knows exist (adjacent to visited via passages). */
+  /** Tiles the player hasn't visited but knows exist (all 8 neighbours of visited tiles). */
   const knownTiles = useMemo(() => {
     const known = new Set<string>();
     for (const key of visitedTiles) {
       const [xs, ys] = key.split(',');
       const x = Number(xs), y = Number(ys);
-      for (const nb of getMazeNeighbors(x, y)) {
-        const nk = tileKey(nb.x, nb.y);
-        if (!visitedTiles.has(nk)) known.add(nk);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < MAP_COLS && ny >= 0 && ny < MAP_ROWS) {
+            const nk = tileKey(nx, ny);
+            if (!visitedTiles.has(nk)) known.add(nk);
+          }
+        }
       }
     }
     return known;
@@ -148,7 +195,9 @@ export function useMap() {
     moveTo,
     consumeTileResource,
     getTileResources,
+    replenishTileResources,
     getReachableTiles,
+    getPathLength,
     MAP_ROWS,
     MAP_COLS,
   };

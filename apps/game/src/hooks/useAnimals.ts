@@ -1,9 +1,9 @@
 // Hook managing wild animals: state, AI movement, and combat.
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { WildAnimal } from '../types/animal';
 import type { PlayerPosition } from '../types/map';
-import { createInitialAnimals } from '../data/animals';
+import { createInitialAnimals, spawnNewWave } from '../data/animals';
 import { getMazeNeighbors, MAP_COLS, MAP_ROWS } from '../data/map';
 import { tileKey } from './useMap';
 
@@ -53,90 +53,145 @@ function stepAwayFrom(pos: PlayerPosition, player: PlayerPosition): PlayerPositi
 }
 
 export function useAnimals() {
-  const [animals, setAnimals] = useState<WildAnimal[]>(createInitialAnimals);
+  const animalsRef = useRef<WildAnimal[]>([]);
+  const [animals, setAnimals] = useState<WildAnimal[]>(() => {
+    const initial = createInitialAnimals();
+    animalsRef.current = initial;
+    return initial;
+  });
 
   /** Move all alive animals one step (called when the player moves). */
   const moveAnimals = useCallback((playerPosition: PlayerPosition) => {
-    setAnimals((prev) =>
-      prev.map((a) => {
-        if (!a.alive) return a;
+    const current = animalsRef.current;
+    const moved = current.map((a) => {
+      if (!a.alive) return a;
 
-        let next: PlayerPosition;
-        if (a.behavior === 'hostile') {
-          // Chase the player
-          const step = nextStepToward(a.position, playerPosition);
-          next = step ?? a.position;
+      let next: PlayerPosition;
+      if (a.behavior === 'hostile') {
+        const step = nextStepToward(a.position, playerPosition);
+        next = step ?? a.position;
+      } else {
+        const px = Math.abs(a.position.x - playerPosition.x);
+        const py = Math.abs(a.position.y - playerPosition.y);
+        if (px + py <= 1) {
+          next = stepAwayFrom(a.position, playerPosition);
         } else {
-          // Neutral: flee if player is adjacent, otherwise wander randomly
-          const px = Math.abs(a.position.x - playerPosition.x);
-          const py = Math.abs(a.position.y - playerPosition.y);
-          if (px + py <= 1) {
-            next = stepAwayFrom(a.position, playerPosition);
-          } else {
-            // 40% chance to move, 60% stay still
-            next = Math.random() < 0.4 ? randomStep(a.position) : a.position;
-          }
+          next = Math.random() < 0.4 ? randomStep(a.position) : a.position;
         }
+      }
 
-        return { ...a, position: next };
-      })
-    );
+      if (next.x === playerPosition.x && next.y === playerPosition.y) {
+        next = a.position;
+      }
+
+      return { ...a, position: next };
+    });
+
+    const nextAnimals = moved.every((a) => !a.alive) ? spawnNewWave() : moved;
+    animalsRef.current = nextAnimals;
+    setAnimals(nextAnimals);
+    return nextAnimals;
   }, []);
 
-  /** Player attacks an animal by id. Returns event message. */
-  const attackAnimal = useCallback((animalId: string): string => {
-    let msg = '';
-    setAnimals((prev) =>
-      prev.map((a) => {
-        if (a.id !== animalId || !a.alive) return a;
-        const newHp = a.hp - PLAYER_ATTACK_DAMAGE;
-        if (newHp <= 0) {
-          msg = `You defeated the ${a.name} ${a.emoji}!`;
-          return { ...a, hp: 0, alive: false };
-        }
-        msg = `You hit ${a.name} ${a.emoji} for ${PLAYER_ATTACK_DAMAGE} damage! (${newHp}/${a.maxHp} HP)`;
-        return { ...a, hp: newHp };
-      })
-    );
-    return msg;
+type AttackResult = {
+  message: string;
+  defeated: boolean;
+  hit: boolean;
+  animalId: string;
+  animalName: string;
+  animalEmoji: string;
+  experience: number;
+};
+
+  /** Spawn a cave wave on schedule (1–2 new animals in cave tiles). */
+  const spawnCaveWave = useCallback((): WildAnimal[] => {
+    const current = animalsRef.current;
+    const spawnFromCave = spawnNewWave();
+    const nextAnimals = current.every((a) => !a.alive)
+      ? spawnFromCave
+      : [...current.filter((a) => a.alive), ...spawnFromCave];
+    animalsRef.current = nextAnimals;
+    setAnimals(nextAnimals);
+    return nextAnimals;
+  }, []);
+
+/** Player attacks an animal by id. Returns event message. */
+  const attackAnimal = useCallback((animalId: string): AttackResult => {
+    const target = animalsRef.current.find((a) => a.id === animalId && a.alive);
+    if (!target) {
+    return {
+      message: '',
+      defeated: false,
+      hit: false,
+      animalId,
+      animalName: '',
+      animalEmoji: '',
+      experience: 0,
+    };
+  }
+
+    const nextHp = target.hp - PLAYER_ATTACK_DAMAGE;
+    const nextAlive = nextHp > 0;
+    const message = nextAlive
+      ? `You hit ${target.name} ${target.emoji} for ${PLAYER_ATTACK_DAMAGE} damage! (${nextHp}/${target.maxHp} HP)`
+      : `You defeated the ${target.name} ${target.emoji}!`;
+
+    const updated = animalsRef.current.map((a) => {
+      if (a.id !== animalId || !a.alive) return a;
+      return { ...a, hp: Math.max(nextHp, 0), alive: nextAlive };
+    });
+    const nextAnimals = updated.every((a) => !a.alive) ? spawnNewWave() : updated;
+    animalsRef.current = nextAnimals;
+    setAnimals(nextAnimals);
+
+    return {
+      message,
+      defeated: !nextAlive,
+      hit: true,
+      animalId,
+      animalName: target.name,
+      animalEmoji: target.emoji,
+      experience: Math.max(1, target.maxHp),
+    };
   }, []);
 
   /** Returns all alive animals at the given tile. */
   const getAnimalsAt = useCallback(
     (x: number, y: number): WildAnimal[] =>
-      animals.filter((a) => a.alive && a.position.x === x && a.position.y === y),
-    [animals]
+      animalsRef.current.filter((a) => a.alive && a.position.x === x && a.position.y === y),
+    []
   );
 
   /** Returns alive hostile animals that are directly adjacent to the player (maze neighbours). */
   const getAdjacentHostile = useCallback(
     (playerPos: PlayerPosition): WildAnimal[] => {
-      return animals.filter((a) => {
+      return animalsRef.current.filter((a) => {
         if (!a.alive || a.behavior !== 'hostile') return false;
         const px = Math.abs(a.position.x - playerPos.x);
         const py = Math.abs(a.position.y - playerPos.y);
-        return px + py === 1; // Manhattan distance 1 (orthogonally adjacent)
+        return px + py === 1; // Orthogonal only (cardinal direction)
       });
     },
-    [animals]
+    []
   );
 
-  /** Returns ALL alive animals directly adjacent to the player. */
+  /** Returns ALL alive animals directly around the player (orthogonal + diagonal). */
   const getAdjacentAnimals = useCallback(
     (playerPos: PlayerPosition): WildAnimal[] => {
-      return animals.filter((a) => {
+      return animalsRef.current.filter((a) => {
         if (!a.alive) return false;
         const px = Math.abs(a.position.x - playerPos.x);
         const py = Math.abs(a.position.y - playerPos.y);
-        return px + py === 1;
+        return px <= 1 && py <= 1 && (px + py > 0);
       });
     },
-    [animals]
+    []
   );
 
   return {
     animals,
     moveAnimals,
+    spawnCaveWave,
     attackAnimal,
     getAnimalsAt,
     getAdjacentHostile,

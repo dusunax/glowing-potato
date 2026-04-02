@@ -4,6 +4,47 @@
 import type { Item } from '../types/items';
 
 export const ITEMS: Item[] = [
+  // ── Animal loot (not naturally spawnable) ─────────────────────────────────
+  {
+    id: 'raw_meat',
+    name: 'Raw Meat',
+    emoji: '🥩',
+    description: 'Fresh meat dropped by a defeated animal.',
+    rarity: 'common',
+    category: 'creature',
+    tags: ['loot'],
+    spawnConditions: { seasons: [] }, // loot-only, never foraged
+  },
+  {
+    id: 'animal_hide',
+    name: 'Animal Hide',
+    emoji: '🪶',
+    description: 'Tough hide stripped from a defeated animal.',
+    rarity: 'common',
+    category: 'creature',
+    tags: ['material', 'loot'],
+    spawnConditions: { seasons: [] }, // loot-only, never foraged
+  },
+  {
+    id: 'hunter_stew',
+    name: 'Hunter Stew',
+    emoji: '🍲',
+    description: 'A hearty stew made from fresh game and wild mushrooms.',
+    rarity: 'uncommon',
+    category: 'creature',
+    tags: ['food', 'cooking'],
+    spawnConditions: { seasons: [] },
+  },
+  {
+    id: 'healing_potion',
+    name: 'Healing Potion',
+    emoji: '🧪',
+    description: 'A sweet berry tonic that restores a lot of health.',
+    rarity: 'rare',
+    category: 'crafted',
+    tags: ['potion'],
+    spawnConditions: { seasons: [] },
+  },
   // ── Flora ──────────────────────────────────────────────────────────────────
   {
     id: 'sunflower',

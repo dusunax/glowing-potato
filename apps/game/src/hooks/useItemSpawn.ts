@@ -28,7 +28,7 @@ export function useItemSpawn({
       // Consume one resource from the tile; -1 means already depleted
       const remaining = consumeTileResource();
       if (remaining < 0) {
-        return 'This area has been exhausted. Move to a new tile to find more.';
+        return '';
       }
       const spawnable = getSpawnableItems(ITEMS, conditions);
       const item = lucky
