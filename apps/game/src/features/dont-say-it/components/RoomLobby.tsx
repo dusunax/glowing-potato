@@ -139,7 +139,7 @@ export function RoomLobby({ rooms, onJoinRoom, onJoinPrivate, onCreateRoom, onBa
           <button
             type="button"
             onClick={() => setShowNicknamePopup(true)}
-            aria-label="닉네임 설정"
+            aria-label="Edit nickname"
             className="w-8 h-8 rounded-full border border-gp-accent/30 text-gp-mint/70 hover:text-gp-mint hover:border-gp-accent/60 hover:bg-gp-accent/10 flex items-center justify-center transition-colors"
             title={`Nickname: ${playerName || 'You'}`}
           >

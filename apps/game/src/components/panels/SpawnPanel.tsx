@@ -18,17 +18,26 @@ const RARITY_BADGE_MAP: Record<string, 'default' | 'success' | 'warning' | 'mute
 
 export function SpawnPanel({ conditions }: SpawnPanelProps) {
   const spawnable = getSpawnableItems(ITEMS, conditions);
+  const EMPTY_SLOT_CLASS =
+    'min-h-[62px] border border-dashed border-gp-mint/55 rounded-lg';
+  const EMPTY_SLOT_STYLE = {
+    background: 'linear-gradient(180deg, rgba(var(--gp-bg), 0.82) 0%, rgba(var(--gp-bg), 0.65) 100%)',
+    boxShadow: 'inset 0 0 0 1px rgba(var(--gp-accent), 0.25)',
+  };
 
   return (
-    <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex flex-col h-full">
+    <div className="flex flex-col">
       <CardTitle className="mb-0.5">🌍 Spawnable Now</CardTitle>
       {/* text-gp-mint/70 on gp-surface: ~3.65:1 — acceptable for small hint text ✓ */}
       <p className="text-xs text-gp-mint/70 mb-3">{spawnable.length} item(s) available</p>
       {spawnable.length === 0 ? (
-        // text-gp-mint/85 on gp-surface: ~4.55:1 — passes WCAG AA ✓
-        <p className="text-gp-mint/85 text-sm">Nothing spawns in these conditions.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={`empty-spawn-${index}`} className={EMPTY_SLOT_CLASS} style={EMPTY_SLOT_STYLE} />
+          ))}
+        </div>
       ) : (
-        <div className="space-y-2 overflow-y-auto flex-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto">
           {spawnable.map((item) => (
             <div key={item.id} className="flex items-center gap-2 bg-gp-bg/30 rounded-lg p-2 border border-gp-accent/20">
               <span className="text-xl">{item.emoji}</span>

@@ -1,26 +1,47 @@
 // Hook that handles the "collect" action: picks a random spawnable item
-// based on current conditions and adds it to inventory.
+// based on current conditions, biome, and luck, then adds it to inventory.
 
 import { useCallback } from 'react';
 import type { WorldConditions } from '../types/conditions';
+import type { BiomeInfo } from '../types/map';
 import { ITEMS } from '../data/items';
-import { getSpawnableItems, pickRandomItem } from '../utils/spawning';
+import { getSpawnableItems, pickRandomItemWithBiome, pickRandomItemLucky } from '../utils/spawning';
 
 interface UseItemSpawnOptions {
   conditions: WorldConditions;
+  biomeInfo: BiomeInfo;
   addItem: (itemId: string, qty?: number) => void;
   markDiscovered: (itemId: string) => void;
+  /** Returns remaining resources on the current tile; pass -1 to indicate depleted already */
+  consumeTileResource: () => number;
 }
 
-export function useItemSpawn({ conditions, addItem, markDiscovered }: UseItemSpawnOptions) {
-  const collect = useCallback((): string => {
-    const spawnable = getSpawnableItems(ITEMS, conditions);
-    const item = pickRandomItem(spawnable);
-    if (!item) return 'Nothing to collect right now. Try a different time or weather.';
-    addItem(item.id);
-    markDiscovered(item.id);
-    return `You found a ${item.emoji} ${item.name}!`;
-  }, [conditions, addItem, markDiscovered]);
+export function useItemSpawn({
+  conditions,
+  biomeInfo,
+  addItem,
+  markDiscovered,
+  consumeTileResource,
+}: UseItemSpawnOptions) {
+  const collect = useCallback(
+    (lucky = false): string => {
+      // Consume one resource from the tile; -1 means already depleted
+      const remaining = consumeTileResource();
+      if (remaining < 0) {
+        return '';
+      }
+      const spawnable = getSpawnableItems(ITEMS, conditions);
+      const item = lucky
+        ? pickRandomItemLucky(spawnable, biomeInfo)
+        : pickRandomItemWithBiome(spawnable, biomeInfo);
+      if (!item) return 'Nothing to collect right now. Try a different time or weather.';
+      addItem(item.id);
+      markDiscovered(item.id);
+      const depletedNote = remaining === 0 ? ' (tile now exhausted)' : '';
+      return `You found a ${item.emoji} ${item.name}!${depletedNote}`;
+    },
+    [conditions, biomeInfo, addItem, markDiscovered, consumeTileResource]
+  );
 
   return { collect };
 }

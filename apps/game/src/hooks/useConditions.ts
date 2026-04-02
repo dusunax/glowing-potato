@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { WorldConditions } from '../types/conditions';
 import { advanceTime } from '../utils/time';
+import { WEATHER_BY_SEASON } from '../constants/weather';
 
 const INITIAL_CONDITIONS: WorldConditions = {
   season: 'Spring',
@@ -9,21 +10,70 @@ const INITIAL_CONDITIONS: WorldConditions = {
   day: 1,
 };
 
+export interface TimeAdvanceResult {
+  messages: string[];
+  isNewDay: boolean;
+  isNewSeason: boolean;
+  resourceRefillCount: number;
+  caveSpawnCount: number;
+}
+
 export function useConditions() {
   const [conditions, setConditions] = useState<WorldConditions>(INITIAL_CONDITIONS);
 
-  const advance = useCallback((): string[] => {
-    let msgs: string[] = [];
+  const advance = useCallback((steps = 1): TimeAdvanceResult => {
+    const stepsToAdvance = Math.max(1, Math.floor(steps));
+    let next = conditions;
+    const messages: string[] = [];
+    let isNewDay = false;
+    let isNewSeason = false;
+    let resourceRefillCount = 0;
+    let caveSpawnCount = 0;
+
+    for (let i = 0; i < stepsToAdvance; i++) {
+      const result = advanceTime(next);
+      next = result.next;
+
+      if (result.isNewDay) {
+        messages.push(`Day ${next.day} begins.`);
+        isNewDay = true;
+        if (next.day % 7 === 0) {
+          resourceRefillCount += 1;
+        }
+        if (next.day % 3 === 0) {
+          caveSpawnCount += 1;
+        }
+      }
+
+      if (result.isNewSeason) {
+        messages.push(`Season changed to ${next.season}!`);
+        isNewSeason = true;
+      }
+    }
+
+    setConditions(next);
+    return {
+      messages,
+      isNewDay,
+      isNewSeason,
+      resourceRefillCount,
+      caveSpawnCount,
+    };
+  }, [conditions]);
+
+  const shiftWeather = useCallback((): string => {
+    let msg = '';
     setConditions((prev) => {
-      const { next, isNewDay, isNewSeason } = advanceTime(prev);
-      const m: string[] = [];
-      if (isNewDay) m.push(`Day ${next.day} begins.`);
-      if (isNewSeason) m.push(`Season changed to ${next.season}!`);
-      msgs = m;
-      return next;
+      const options = WEATHER_BY_SEASON[prev.season];
+      if (!options || options.length === 0) return prev;
+      const others = options.filter((w) => w !== prev.weather);
+      const pool = others.length > 0 ? others : options;
+      const next = pool[Math.floor(Math.random() * pool.length)]!;
+      msg = `Weather shifted to ${next}!`;
+      return { ...prev, weather: next };
     });
-    return msgs;
+    return msg;
   }, []);
 
-  return { conditions, advance };
+  return { conditions, advance, shiftWeather };
 }

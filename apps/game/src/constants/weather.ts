@@ -12,3 +12,11 @@ export const WEATHER_BY_SEASON: Record<Season, Weather[]> = {
   Autumn: ['Rainy', 'Foggy', 'Cloudy'],
   Winter: ['Snowy', 'Cloudy', 'Foggy'],
 };
+
+export const WEATHER_EMOJIS: Record<Weather, string> = {
+  Sunny: '☀️',
+  Rainy: '🌧️',
+  Cloudy: '☁️',
+  Foggy: '🌫️',
+  Snowy: '❄️',
+};
