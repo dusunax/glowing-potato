@@ -1,13 +1,14 @@
 // Main lobby screen. Displays all mini-games in a slot-style carousel so the
 // player can pick which game to play.
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
 import { MINI_GAMES } from '../data/minigames';
 import type { MiniGame } from '../types/minigame';
 import { Button, Badge } from '@glowing-potato/ui';
 import { UserEditPopup } from './UserEditPopup';
 import type { NicknameUpdateResult } from '../hooks/useAuth';
+import { useLeaderboard } from '../hooks/useLeaderboard';
 
 // Fixed card dimensions shared between GameCard and the slot frame overlay.
 const CARD_WIDTH_CLASS = 'w-64';
@@ -28,6 +29,14 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
   const [spinning, setSpinning] = useState(false);
   const [showUserEdit, setShowUserEdit] = useState(false);
   const spinIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { records: leaderboard, loading: leaderboardLoading } = useLeaderboard(10);
+  const leaderboardRows = useMemo(() => {
+    return Array.from({ length: 10 }, (_, index) => {
+      const record = leaderboard[index];
+      if (record) return { type: 'record' as const, record, index };
+      return { type: 'empty' as const, index };
+    });
+  }, [leaderboard]);
 
   const total = MINI_GAMES.length;
 
@@ -263,6 +272,74 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
           ))}
         </div>
       </div>
+
+      {/* Leaderboard */}
+      <div className="mt-12 w-full max-w-3xl pb-10">
+        <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
+          🏆 Leaderboard — Glowing Potato
+        </h2>
+        {leaderboardLoading ? (
+          <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
+            {Array.from({ length: 10 }).map((_, index) => (
+              <div
+                key={`leaderboard-skeleton-${index}`}
+                className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                  index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
+                }`}
+              >
+                <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(index)}`}>
+                  {getRankLabel(index)}
+                </span>
+                <div className="h-3 flex-1 rounded bg-gp-accent/20 animate-pulse" />
+                <div className="h-3 w-20 rounded bg-gp-accent/20 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
+            {leaderboardRows.map((row) => {
+              if (row.type === 'record') {
+                const record = row.record;
+                return (
+                  <div
+                    key={record.id ?? row.index}
+                    className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                      row.index === 0 ? 'bg-gp-bg/75' : 'bg-gp-surface/65'
+                    }`}
+                  >
+                    <span className={`w-6 text-center font-bold ${getRankColorClass(row.index)}`}>
+                      {getRankLabel(row.index)}
+                    </span>
+                    <span className="flex-1 font-medium text-gp-mint truncate">{record.displayName}</span>
+                    <span className="font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
+                    <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
+                    <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={`empty-slot-${row.index}`}
+                  className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                    row.index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
+                  }`}
+                >
+                  <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(row.index)}`}>
+                    {getRankLabel(row.index)}
+                  </span>
+                  <span className="flex-1 font-medium text-gp-mint/40">-</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {!user && (
+          <p className="text-center text-gp-mint/40 text-xs mt-3">
+            Sign in with Google to save your scores.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -272,6 +349,20 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
 interface GameCardProps {
   game: MiniGame;
   active?: boolean;
+}
+
+function getRankColorClass(rank: number): string {
+  if (rank === 0) return 'text-yellow-400';
+  if (rank === 1) return 'text-gp-mint/70';
+  if (rank === 2) return 'text-orange-400';
+  return 'text-gp-mint/40';
+}
+
+function getRankLabel(rank: number): string {
+  if (rank === 0) return '🥇';
+  if (rank === 1) return '🥈';
+  if (rank === 2) return '🥉';
+  return `${rank + 1}`;
 }
 
 // Fixed dimensions so ghost and active cards are always the same size.
