@@ -1,5 +1,5 @@
-// Main lobby screen. Displays all mini-games in a slot-style carousel so the
-// player can pick which game to play.
+// Main lobby screen. Displays all mini-games in a slot-style carousel and
+// full-page (100vh) introduction sections for each available game.
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
@@ -13,6 +13,28 @@ import { useLeaderboard } from '../hooks/useLeaderboard';
 // Fixed card dimensions shared between GameCard and the slot frame overlay.
 const CARD_WIDTH_CLASS = 'w-64';
 const CARD_HEIGHT_CLASS = 'h-72';
+
+// Per-game introduction content shown in the full-page intro sections.
+const GAME_INTROS: Record<string, { tagline: string; features: { icon: string; text: string }[] }> = {
+  'dont-say-it': {
+    tagline: '말하면 지는 멀티플레이어 금칙어 게임',
+    features: [
+      { icon: '🔑', text: '비밀 금칙어를 부여받아요' },
+      { icon: '💬', text: '자유롭게 대화하면서 금칙어를 피해요' },
+      { icon: '🕵️', text: '다른 플레이어의 금칙어를 추리해요' },
+      { icon: '👑', text: '마지막까지 살아남은 플레이어가 승리!' },
+    ],
+  },
+  collection: {
+    tagline: '계절을 탐험하는 수집 & 생존 게임',
+    features: [
+      { icon: '🗺️', text: '5×5 바이옴 맵을 탐험해요' },
+      { icon: '🍄', text: '계절별 아이템을 채집해요' },
+      { icon: '⚗️', text: '희귀 아이템을 제작해요' },
+      { icon: '📖', text: '발견 일지를 채워 최고 점수에 도전!' },
+    ],
+  },
+};
 
 interface GameLobbyProps {
   onSelectGame: (gameId: string) => void;
@@ -85,9 +107,9 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
   const userDisplayName = user ? (nickname || user.displayName || '') : '';
 
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center p-6 bg-gp-bg">
-      {/* Top-right auth controls */}
-      <div className="absolute top-4 right-4 flex items-center gap-2">
+    <div className="bg-gp-bg">
+      {/* Fixed top-right auth controls — always visible while scrolling */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-gp-bg/80 backdrop-blur-sm rounded-full px-1 py-1">
         {user ? (
           <>
             <button
@@ -136,8 +158,11 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
           onClose={() => setShowUserEdit(false)}
         />
       )}
-      {/* Header */}
-      <header className="text-center mb-10">
+
+      {/* === Section 1: Lobby carousel === */}
+      <section className="min-h-screen flex flex-col items-center justify-center p-6 relative">
+        {/* Header */}
+        <header className="text-center mb-10">
         <p className="text-xs font-semibold tracking-widest text-gp-accent uppercase mb-2">
           Mini-Game Arcade
         </p>
@@ -245,100 +270,116 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
       </div>
 
       {/* All games grid */}
-      <div className="mt-12 w-full max-w-3xl">
-        <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
-          All Games
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-          {MINI_GAMES.map((game, i) => (
-            <button
-              key={game.id}
-              onClick={() => !spinning && setActiveIndex(i)}
-              className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-150 text-left ${
-                i === activeIndex
-                  ? 'border-gp-mint/50 bg-gp-surface'
-                  : 'border-gp-accent/20 bg-gp-surface/30 hover:border-gp-accent/50 hover:bg-gp-surface/60'
-              } ${game.status === 'coming-soon' ? 'opacity-50' : ''}`}
-            >
-              <span className="text-2xl">{game.emoji}</span>
-              <span className="text-xs text-gp-mint font-medium text-center leading-tight">
-                {game.name}
-              </span>
-              {game.status === 'coming-soon' && (
-                <span className="text-[10px] text-gp-mint/50">Soon</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Leaderboard */}
-      <div className="mt-12 w-full max-w-3xl pb-10">
-        <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
-          🏆 Leaderboard — Glowing Potato
-        </h2>
-        {leaderboardLoading ? (
-          <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
-            {Array.from({ length: 10 }).map((_, index) => (
-              <div
-                key={`leaderboard-skeleton-${index}`}
-                className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
-                  index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
+        <div className="mt-12 w-full max-w-3xl">
+          <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
+            All Games
+          </h2>
+          <div className="flex justify-center gap-3">
+            {MINI_GAMES.map((game, i) => (
+              <button
+                key={game.id}
+                onClick={() => !spinning && setActiveIndex(i)}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-150 w-32 ${
+                  i === activeIndex
+                    ? 'border-gp-mint/50 bg-gp-surface'
+                    : 'border-gp-accent/20 bg-gp-surface/30 hover:border-gp-accent/50 hover:bg-gp-surface/60'
                 }`}
               >
-                <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(index)}`}>
-                  {getRankLabel(index)}
+                <span className="text-2xl">{game.emoji}</span>
+                <span className="text-xs text-gp-mint font-medium text-center leading-tight">
+                  {game.name}
                 </span>
-                <div className="h-3 flex-1 rounded bg-gp-accent/20 animate-pulse" />
-                <div className="h-3 w-20 rounded bg-gp-accent/20 animate-pulse" />
-              </div>
+              </button>
             ))}
           </div>
-        ) : (
-          <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
-            {leaderboardRows.map((row) => {
-              if (row.type === 'record') {
-                const record = row.record;
-                return (
-                  <div
-                    key={record.id ?? row.index}
-                    className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
-                      row.index === 0 ? 'bg-gp-bg/75' : 'bg-gp-surface/65'
-                    }`}
-                  >
-                    <span className={`w-6 text-center font-bold ${getRankColorClass(row.index)}`}>
-                      {getRankLabel(row.index)}
-                    </span>
-                    <span className="flex-1 font-medium text-gp-mint truncate">{record.displayName}</span>
-                    <span className="font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
-                    <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
-                    <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>
-                  </div>
-                );
-              }
+        </div>
 
-              return (
+      {/* Leaderboard */}
+        <div className="mt-12 w-full max-w-3xl">
+          <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
+            🏆 Leaderboard — Glowing Potato
+          </h2>
+          {leaderboardLoading ? (
+            <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
+              {Array.from({ length: 10 }).map((_, index) => (
                 <div
-                  key={`empty-slot-${row.index}`}
+                  key={`leaderboard-skeleton-${index}`}
                   className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
-                    row.index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
+                    index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
                   }`}
                 >
-                  <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(row.index)}`}>
-                    {getRankLabel(row.index)}
+                  <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(index)}`}>
+                    {getRankLabel(index)}
                   </span>
-                  <span className="flex-1 font-medium text-gp-mint/40">-</span>
+                  <div className="h-3 flex-1 rounded bg-gp-accent/20 animate-pulse" />
+                  <div className="h-3 w-20 rounded bg-gp-accent/20 animate-pulse" />
                 </div>
-              );
-            })}
-          </div>
-        )}
-        {!user && (
-          <p className="text-center text-gp-mint/40 text-xs mt-3">
-            Sign in with Google to save your scores.
-          </p>
-        )}
-      </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
+              {leaderboardRows.map((row) => {
+                if (row.type === 'record') {
+                  const record = row.record;
+                  return (
+                    <div
+                      key={record.id ?? row.index}
+                      className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                        row.index === 0 ? 'bg-gp-bg/75' : 'bg-gp-surface/65'
+                      }`}
+                    >
+                      <span className={`w-6 text-center font-bold ${getRankColorClass(row.index)}`}>
+                        {getRankLabel(row.index)}
+                      </span>
+                      <span className="flex-1 font-medium text-gp-mint truncate">{record.displayName}</span>
+                      <span className="font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
+                      <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
+                      <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={`empty-slot-${row.index}`}
+                    className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                      row.index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
+                    }`}
+                  >
+                    <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(row.index)}`}>
+                      {getRankLabel(row.index)}
+                    </span>
+                    <span className="flex-1 font-medium text-gp-mint/40">-</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {!user && (
+            <p className="text-center text-gp-mint/40 text-xs mt-3">
+              Sign in with Google to save your scores.
+            </p>
+          )}
+        </div>
+
+        {/* Scroll-down hint */}
+        <div className="mt-10 mb-4 flex flex-col items-center gap-1 animate-bounce">
+          <span className="text-gp-mint/30 text-xs tracking-widest uppercase">게임 소개 보기</span>
+          <span className="text-gp-mint/30 text-lg">↓</span>
+        </div>
+      </section>
+
+      {/* === Sections 2+: per-game introduction (100vh each) === */}
+      {MINI_GAMES.filter((g) => g.status === 'available').map((game) => (
+        <GameIntroSection
+          key={game.id}
+          game={game}
+          intro={GAME_INTROS[game.id]}
+          onPlay={() => onSelectGame(game.id)}
+          user={user}
+          onSignIn={onSignIn}
+        />
+      ))}
     </div>
   );
 }
@@ -389,12 +430,59 @@ function GameCard({ game, active = false }: GameCardProps) {
           {game.description}
         </div>
       </div>
-      {game.status === 'coming-soon' && (
-        <Badge label="Coming Soon" variant="muted" />
-      )}
       {game.status === 'available' && active && (
         <Badge label="● Available" variant="success" />
       )}
     </div>
+  );
+}
+
+// --- GameIntroSection ---
+
+interface GameIntroSectionProps {
+  game: MiniGame;
+  intro: { tagline: string; features: { icon: string; text: string }[] } | undefined;
+  onPlay: () => void;
+  user?: User | null;
+  onSignIn?: () => void;
+}
+
+function GameIntroSection({ game, intro, onPlay, user, onSignIn }: GameIntroSectionProps) {
+  if (!intro) return null;
+  return (
+    <section
+      className="min-h-screen flex flex-col items-center justify-center p-8 relative border-t border-gp-accent/10"
+      style={{ background: `radial-gradient(ellipse at 50% 60%, ${game.color}18 0%, transparent 65%)` }}
+    >
+      <div className="max-w-xl w-full text-center">
+        <span className="text-8xl mb-6 block" role="img" aria-label={game.name}>
+          {game.emoji}
+        </span>
+        <h2 className="text-4xl font-bold text-gp-mint mb-2">{game.name}</h2>
+        <p className="text-gp-mint/70 text-lg mb-8">{intro.tagline}</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10 text-left">
+          {intro.features.map((feature) => (
+            <div
+              key={feature.text}
+              className="flex items-center gap-3 p-4 rounded-xl bg-gp-surface/40 border border-gp-accent/20"
+            >
+              <span className="text-2xl flex-shrink-0" role="img" aria-hidden="true">
+                {feature.icon}
+              </span>
+              {/* text-gp-mint/85 on gp-surface/40 background: passes WCAG AA ✓ */}
+              <span className="text-gp-mint/85 text-sm">{feature.text}</span>
+            </div>
+          ))}
+        </div>
+
+        <Button variant="primary" size="lg" onClick={onPlay}>
+          ▶ Play {game.name}
+        </Button>
+        {!user && onSignIn && (
+          <p className="text-gp-mint/40 text-xs mt-3">Sign in with Google to save your scores.</p>
+        )}
+      </div>
+    </section>
   );
 }
