@@ -10,6 +10,7 @@ import { CardTitle } from '@glowing-potato/ui';
 interface MapPanelProps {
   position: PlayerPosition;
   selectedCard: ActionCard | null;
+  showPlayerMoveHint?: boolean;
   onTileClick: (x: number, y: number) => void;
   currentBiomeInfo: BiomeInfo;
   canMoveTo: (x: number, y: number, range?: number) => boolean;
@@ -24,6 +25,7 @@ interface MapPanelProps {
 export function MapPanel({
   position,
   selectedCard,
+  showPlayerMoveHint = false,
   onTileClick,
   currentBiomeInfo,
   visitedTiles,
@@ -87,7 +89,9 @@ export function MapPanel({
                 ? ' bg-gp-bg border border-red-900/40 cursor-default'
                 : ' bg-gp-bg border border-gp-bg cursor-default';
             } else if (isPlayer) {
-              tileClass += ' border-2 border-gp-mint bg-gp-accent/40 ring-2 ring-gp-mint shadow-lg z-10';
+              tileClass += ` border-2 border-gp-mint bg-gp-accent/40 ring-2 ring-gp-mint shadow-lg z-10 ${
+                showPlayerMoveHint ? 'animate-pulse scale-105 ring-gp-mint/90' : ''
+              }`;
             } else if (!isVisited && isKnown) {
               // Known but unvisited — dim
               tileClass += ' border border-gp-accent/20 bg-gp-bg/60 opacity-60 cursor-default';
@@ -99,7 +103,9 @@ export function MapPanel({
             }
 
             const hidden = !isVisited && !isKnown;
-            const clickable = isMoveCard ? (isReachable || isNearbyAnimal) : isNearbyAnimal;
+            const clickable = isMoveCard
+              ? (isReachable || isNearbyAnimal || isPlayer)
+              : (isNearbyAnimal || isPlayer);
 
             return (
               <div key={key} className="relative">

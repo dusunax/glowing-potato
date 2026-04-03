@@ -7,6 +7,7 @@ import { Badge } from '@glowing-potato/ui';
 interface ActionCardDisplayProps {
   card: ActionCard;
   isSelected: boolean;
+  isHighlighted?: boolean;
   onClick: () => void;
   className?: string;
   style?: CSSProperties;
@@ -34,7 +35,14 @@ const RARITY_BADGE: Record<string, 'muted' | 'success' | 'warning'> = {
   rare: 'warning',
 };
 
-export function ActionCardDisplay({ card, isSelected, onClick, className = '', style }: ActionCardDisplayProps) {
+export function ActionCardDisplay({
+  card,
+  isSelected,
+  isHighlighted = false,
+  onClick,
+  className = '',
+  style,
+}: ActionCardDisplayProps) {
   const theme = TYPE_THEME[card.type];
   const badgeVariant = RARITY_BADGE[card.rarity] ?? 'muted';
 
@@ -52,7 +60,7 @@ export function ActionCardDisplay({ card, isSelected, onClick, className = '', s
           'focus-visible:ring-2 focus-visible:ring-gp-mint',
           theme.border,
           isSelected
-          ? `${theme.selected} ring-2 scale-[1.04] shadow-lg`
+          ? `${theme.selected} ring-2 scale-[1.04] shadow-lg ${isHighlighted ? 'animate-pulse ring-offset-2 ring-offset-gp-surface/30' : ''}`
           : `${theme.base} hover:-top-0.5`,
           className,
         ].join(' ')}
