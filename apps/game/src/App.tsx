@@ -21,6 +21,7 @@ import { getSeasonColor } from './utils/time';
 import { getItemById } from './data/items';
 import { calculateScore } from './utils/score';
 import { tileKey } from './hooks/useMap';
+import { useLeaderboard } from './hooks/useLeaderboard';
 import type { ActionCard } from './types/actionCard';
 import type { User } from 'firebase/auth';
 
@@ -79,7 +80,15 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'spawnable',  label: '🌍 Spawnable' },
 ];
 
-function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?: User | null; nickname?: string }) {
+function CollectionGame({
+  onBack,
+  onRestart,
+  user,
+}: {
+  onBack: () => void;
+  onRestart: () => void;
+  user?: User | null;
+}) {
   const {
     conditions,
     playerHp,
@@ -133,10 +142,9 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
   useEffect(() => {
     if (!isPlayerDead || savedRef.current) return;
     savedRef.current = true;
-    if (!user) return;
+    const recordUserId = user?.uid ?? `guest-${Math.floor(Math.random() * 1000000000)}`;
     saveRecord({
-      userId: user.uid,
-      nickname: nickname || user.displayName || 'Anonymous',
+      userId: recordUserId,
       score: finalScore,
       survivalDays: conditions.day,
       level: playerLevel,
@@ -144,7 +152,47 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
       defeatedAnimals,
       inventorySnapshot: inventory,
     });
-  }, [isPlayerDead, user, nickname, finalScore, conditions.day, playerLevel, totalXpGained, defeatedAnimals, inventory, saveRecord]);
+    }, [isPlayerDead, user, finalScore, conditions.day, playerLevel, totalXpGained, defeatedAnimals, inventory, saveRecord]);
+
+  const [showLeaderboardPopup, setShowLeaderboardPopup] = useState(false);
+  const { records: leaderboardRecords, loading: leaderboardLoading, refresh: refreshLeaderboard } = useLeaderboard(10);
+
+  useEffect(() => {
+    if (!showLeaderboardPopup) return;
+    refreshLeaderboard();
+  }, [showLeaderboardPopup, refreshLeaderboard]);
+
+  const leaderboardRows = useMemo(() => {
+    const rows = Array.from({ length: 10 }, (_, index) => {
+      const record = leaderboardRecords[index];
+      if (record) {
+        return { type: 'record' as const, record, index };
+      }
+      return { type: 'empty' as const, index };
+    });
+    return rows;
+  }, [leaderboardRecords]);
+
+  const playerRankLabel = useMemo(() => {
+    if (leaderboardRecords.length === 0) return null;
+    const rank = leaderboardRecords.reduce((count, record) => count + (record.score > finalScore ? 1 : 0), 0) + 1;
+    if (rank >= 100) return '100+';
+    return String(rank);
+  }, [leaderboardRecords, finalScore]);
+
+  function getRankLabel(rank: number): string {
+    if (rank === 0) return '🥇';
+    if (rank === 1) return '🥈';
+    if (rank === 2) return '🥉';
+    return `${rank + 1}`;
+  }
+
+  function getRankColorClass(rank: number): string {
+    if (rank === 0) return 'text-yellow-400';
+    if (rank === 1) return 'text-gp-mint/70';
+    if (rank === 2) return 'text-orange-400';
+    return 'text-gp-mint/60';
+  }
 
 
   const BELT_SLOT_COUNT = 8;
@@ -153,6 +201,8 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
     Array.from({ length: BELT_SLOT_COUNT }, () => null as string | null)
   );
   const [selectedBeltSlot, setSelectedBeltSlot] = useState(0);
+  const [moveCardFlash, setMoveCardFlash] = useState(false);
+  const moveCardFlashTimer = useRef<number | null>(null);
 
   const seasonColorClass = getSeasonColor(conditions.season);
   const activeTabIndex = activeTab ? TABS.findIndex((tab) => tab.id === activeTab) : 0;
@@ -179,6 +229,19 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
 
   function onTileClick(x: number, y: number) {
     if (isPlayerDead) return;
+    if (position.x === x && position.y === y) {
+      const firstMoveCard = hand.find((card) => card.type === 'explore' || card.type === 'sprint');
+      if (firstMoveCard) {
+        if (moveCardFlashTimer.current) window.clearTimeout(moveCardFlashTimer.current);
+        setMoveCardFlash(true);
+        moveCardFlashTimer.current = window.setTimeout(() => {
+          setMoveCardFlash(false);
+        }, 900);
+        selectCard(firstMoveCard);
+      }
+      return;
+    }
+
     const target = adjacentAnimals.find((a) => a.position.x === x && a.position.y === y);
     if (target) {
       handleStrike(target.id);
@@ -254,7 +317,15 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
     handleUseItem(itemId);
   }
 
-  const eventLog = useMemo(() => [...events].reverse(), [events]);
+  const eventLog = useMemo(() => [...events].reverse().slice(0, 8), [events]);
+
+  useEffect(() => {
+    return () => {
+      if (moveCardFlashTimer.current) {
+        window.clearTimeout(moveCardFlashTimer.current);
+      }
+    };
+  }, []);
 
   const emptySlotClass = 'min-h-[64px] border border-dashed border-gp-mint/55 rounded-lg';
   const emptySlotStyle = {
@@ -271,6 +342,7 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
         <MapPanel
           position={position}
           selectedCard={selectedCard}
+          showPlayerMoveHint={moveCardFlash}
           onTileClick={onTileClick}
           currentBiomeInfo={currentBiomeInfo}
           canMoveTo={canMoveTo}
@@ -357,6 +429,7 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
                   <ActionCardDisplay
                     card={card}
                     isSelected={isSelected}
+                    isHighlighted={moveCardFlash && isSelected}
                     onClick={() => onCardClick(card)}
                     className={isPlayerDead ? 'opacity-60' : ''}
                     style={{ zIndex: isSelected ? 30 : 10 - index }}
@@ -405,7 +478,7 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
               No events yet. Play a card to start!
             </p>
           ) : (
-            <div className="space-y-1.5 overflow-y-auto">
+            <div className="space-y-1.5 overflow-y-auto max-h-56">
               {eventLog.map((ev) => (
                 <div
                   key={ev.id}
@@ -509,12 +582,19 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
             <div className="p-4 transition-all duration-300 transform flex-1 min-h-0 flex flex-col">
               <div className="overflow-hidden flex-1 min-h-0 flex relative">
                 {isPlayerDead && (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-gp-bg/70 p-4">
-                    <div className="bg-gp-surface border border-red-500/40 rounded-xl p-5 text-center space-y-3 max-w-sm w-full">
-                      <p className="text-red-300 font-bold text-lg">💀 You died!</p>
-                      <div className="text-4xl font-bold text-gp-mint">
+                  <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 p-4">
+                    <div className="bg-zinc-800 border border-red-500/50 rounded-xl p-5 text-center space-y-3 max-w-sm w-full relative">
+                      {playerRankLabel && (
+                        <div className="absolute right-4 top-4 flex items-center gap-1.5 px-2 py-1 rounded-lg border border-gp-accent/30 bg-gp-bg/40 text-xs">
+                          <span className="text-gp-mint">🏅</span>
+                          <span className="font-semibold text-gp-mint">#{playerRankLabel}</span>
+                        </div>
+                      )}
+                      <p className="text-red-300 font-bold text-xl">💀 You Died</p>
+                      <div className="text-4xl font-black text-gp-mint">
                         {finalScore.toLocaleString()} pts
                       </div>
+                      <p className="text-xs text-gp-mint/70">Survival report for this run</p>
                       <div className="grid grid-cols-3 gap-2 text-xs text-gp-mint/80">
                         <div className="bg-gp-bg/40 rounded-lg p-2">
                           <div className="font-semibold text-gp-mint">📅 Day</div>
@@ -541,13 +621,83 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
                           </div>
                         </div>
                       )}
-                      {!user && (
-                        <p className="text-gp-mint/50 text-xs">Sign in to save your score to the leaderboard.</p>
-                      )}
-                      <Button variant="primary" size="sm" onClick={onBack} className="w-full">
+                      <p className="text-gp-mint/50 text-xs">
+                        {user ? 'Score saved to the leaderboard.' : 'Score saved as Guest.'}
+                      </p>
+                      <Button variant="primary" size="sm" onClick={onRestart} className="w-full">
+                        🔄 Restart
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => setShowLeaderboardPopup(true)} className="w-full">
+                        View Leaderboard
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={onBack} className="w-full">
                         ↩ Return to lobby
                       </Button>
                     </div>
+                    {showLeaderboardPopup && (
+                      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4">
+                        <div className="bg-gp-surface border-2 border-gp-accent/45 rounded-xl p-4 w-full max-w-md max-h-[82vh] flex flex-col shadow-[0_20px_60px_-30px_rgba(14,165,233,0.25)]">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold text-gp-mint">🏆 Leaderboard</h3>
+                            <button
+                              type="button"
+                              onClick={() => setShowLeaderboardPopup(false)}
+                              aria-label="Close leaderboard"
+                              className="w-7 h-7 rounded-md border border-gp-accent/50 text-gp-mint bg-gp-bg/60 hover:bg-gp-accent/20 hover:border-gp-accent transition-colors font-bold text-sm leading-none"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          {leaderboardLoading ? (
+                            <div className="overflow-y-auto max-h-96 space-y-1 pr-1">
+                              {Array.from({ length: 10 }).map((_, index) => (
+                                <div
+                                  key={`leaderboard-skeleton-${index}`}
+                                  className="h-[42px] flex items-center gap-2 px-2 py-2 border border-gp-accent/25 rounded-lg bg-gp-bg/55"
+                                >
+                                  <span className={`w-6 text-center text-sm font-bold ${getRankColorClass(index)}`}>
+                                    {getRankLabel(index)}
+                                  </span>
+                                  <div className="h-3 flex-1 rounded bg-gp-accent/20 animate-pulse" />
+                                  <div className="h-3 w-20 rounded bg-gp-accent/20 animate-pulse" />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="overflow-y-auto max-h-96 space-y-1 pr-1">
+                              {leaderboardRows.map((row) => {
+                                if (row.type === 'record') {
+                                  const rank = row.index;
+                                  const record = row.record;
+                                  return (
+                                    <div
+                                      key={record.id ?? `${record.displayName}-${record.score}-${rank}`}
+                                      className="flex items-center gap-2 px-2 py-2 border border-gp-accent/25 rounded-lg bg-gp-bg/55"
+                                    >
+                                      <span className={`w-6 text-center text-sm font-bold ${getRankColorClass(rank)}`}>
+                                        {getRankLabel(rank)}
+                                      </span>
+                                      <span className="flex-1 text-left text-xs text-gp-mint truncate">{record.displayName}</span>
+                                      <span className="text-xs font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
+                                    </div>
+                                  );
+                                }
+
+                                  return (
+                                    <div
+                                      key={`empty-slot-${row.index}`}
+                                      className="flex items-center gap-2 px-2 py-2 border border-dashed border-gp-accent/30 rounded-lg bg-gp-bg/35"
+                                    >
+                                      <span className="w-6 text-center text-sm text-gp-mint/50">{getRankLabel(row.index)}</span>
+                                    <span className="flex-1 text-left text-xs text-gp-mint/40">-</span>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 <div
@@ -593,6 +743,7 @@ function CollectionGame({ onBack, user, nickname }: { onBack: () => void; user?:
 
 export default function App() {
   const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [collectionGameSession, setCollectionGameSession] = useState(0);
   const [signInError, setSignInError] = useState<string | null>(null);
   const { user, nickname, loading, signInWithGoogle, signOut, updateNickname } = useAuth();
 
@@ -615,7 +766,14 @@ export default function App() {
   }
 
   if (activeGame === 'collection') {
-    return <CollectionGame onBack={() => setActiveGame(null)} user={user} nickname={nickname} />;
+    return (
+      <CollectionGame
+        key={collectionGameSession}
+        onBack={() => setActiveGame(null)}
+        onRestart={() => setCollectionGameSession((prev) => prev + 1)}
+        user={user}
+      />
+    );
   }
 
   if (activeGame === 'dont-say-it') {

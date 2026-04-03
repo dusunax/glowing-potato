@@ -1,7 +1,7 @@
 // Main lobby screen. Displays all mini-games in a slot-style carousel so the
 // player can pick which game to play.
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
 import { MINI_GAMES } from '../data/minigames';
 import type { MiniGame } from '../types/minigame';
@@ -29,6 +29,13 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
   const [showUserEdit, setShowUserEdit] = useState(false);
   const spinIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { records: leaderboard, loading: leaderboardLoading } = useLeaderboard(10);
+  const leaderboardRows = useMemo(() => {
+    return Array.from({ length: 10 }, (_, index) => {
+      const record = leaderboard[index];
+      if (record) return { type: 'record' as const, record, index };
+      return { type: 'empty' as const, index };
+    });
+  }, [leaderboard]);
 
   const total = MINI_GAMES.length;
 
@@ -271,27 +278,59 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
           🏆 Leaderboard — Glowing Potato
         </h2>
         {leaderboardLoading ? (
-          <p className="text-center text-gp-mint/40 text-sm">Loading…</p>
-        ) : leaderboard.length === 0 ? (
-          <p className="text-center text-gp-mint/40 text-sm">No records yet. Be the first to play!</p>
-        ) : (
-          <div className="rounded-xl border border-gp-accent/20 overflow-hidden">
-            {leaderboard.map((record, i) => (
+          <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
+            {Array.from({ length: 10 }).map((_, index) => (
               <div
-                key={record.id ?? i}
+                key={`leaderboard-skeleton-${index}`}
                 className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
-                  i === 0 ? 'bg-gp-surface' : 'bg-gp-surface/40'
+                  index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
                 }`}
               >
-                <span className={`w-6 text-center font-bold ${getRankColorClass(i)}`}>
-                  {getRankLabel(i)}
+                <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(index)}`}>
+                  {getRankLabel(index)}
                 </span>
-                <span className="flex-1 font-medium text-gp-mint truncate">{record.nickname}</span>
-                <span className="font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
-                <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
-                <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>
+                <div className="h-3 flex-1 rounded bg-gp-accent/20 animate-pulse" />
+                <div className="h-3 w-20 rounded bg-gp-accent/20 animate-pulse" />
               </div>
             ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
+            {leaderboardRows.map((row) => {
+              if (row.type === 'record') {
+                const record = row.record;
+                return (
+                  <div
+                    key={record.id ?? row.index}
+                    className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                      row.index === 0 ? 'bg-gp-bg/75' : 'bg-gp-surface/65'
+                    }`}
+                  >
+                    <span className={`w-6 text-center font-bold ${getRankColorClass(row.index)}`}>
+                      {getRankLabel(row.index)}
+                    </span>
+                    <span className="flex-1 font-medium text-gp-mint truncate">{record.displayName}</span>
+                    <span className="font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
+                    <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
+                    <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={`empty-slot-${row.index}`}
+                  className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                    row.index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
+                  }`}
+                >
+                  <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(row.index)}`}>
+                    {getRankLabel(row.index)}
+                  </span>
+                  <span className="flex-1 font-medium text-gp-mint/40">-</span>
+                </div>
+              );
+            })}
           </div>
         )}
         {!user && (

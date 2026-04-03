@@ -9,5 +9,5 @@ export type { CardProps, CardHeaderProps, CardBodyProps, CardTitleProps, CardDes
 export { Badge } from './components/Badge.tsx';
 export type { BadgeProps } from './components/Badge.tsx';
 
-export { palette } from './tokens';
-export type { PaletteKey } from './tokens';
+export { palette } from '@glowing-potato/theme';
+export type { PaletteKey } from '@glowing-potato/theme';

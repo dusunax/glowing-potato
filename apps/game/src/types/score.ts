@@ -7,7 +7,7 @@ export interface AnimalRecord {
 export interface GameRecord {
   id?: string;
   userId: string;
-  nickname: string;
+  nickname?: string;
   score: number;
   survivalDays: number;
   level: number;

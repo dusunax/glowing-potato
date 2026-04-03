@@ -23,6 +23,7 @@ const XP_LEVEL_GROWTH = 2;
 const HP_INCREASE_PER_LEVEL = 2;
 const FOOD_HEAL = 4;
 const POTION_HEAL = 8;
+const MAX_EVENT_LOGS = 12;
 
 let eventCounter = 0;
 
@@ -39,7 +40,7 @@ export function useGameState() {
 
   const pushEvent = useCallback((message: string, type: GameEvent['type'] = 'info') => {
     const ev: GameEvent = { id: String(++eventCounter), message, type, timestamp: Date.now() };
-    setEvents((prev) => [...prev, ev].slice(-20));
+    setEvents((prev) => [...prev, ev].slice(-MAX_EVENT_LOGS));
   }, []);
 
   const xpNeededForNextLevel = useCallback(
@@ -204,21 +205,21 @@ export function useGameState() {
         pushEvent(`🐾 ${caveSpawnCount} cave ${waveLabel} of animals emerged.`, 'warning');
       }
 
-      const seenHostiles = new Set<string>();
+      const adjacentHostiles = nextAnimals.filter(
+        (a) =>
+          a.alive &&
+          a.behavior === 'hostile' &&
+          Math.abs(a.position.x - newPosition.x) + Math.abs(a.position.y - newPosition.y) === 1
+      );
+      const totalDamage = adjacentHostiles.reduce((sum, a) => sum + Math.max(0, a.attack), 0);
+
+      adjacentHostiles.forEach((a) => {
+        pushEvent(`${a.emoji} ${a.name} attacks you for ${a.attack} damage!`, 'warning');
+      });
+
       setPlayerHp((prevHp) => {
-        const adjacent = nextAnimals.filter(
-          (a) =>
-            a.alive &&
-            a.behavior === 'hostile' &&
-            Math.abs(a.position.x - newPosition.x) + Math.abs(a.position.y - newPosition.y) === 1 &&
-            !seenHostiles.has(a.id) &&
-            !!(seenHostiles.add(a.id))
-        );
         let hp = prevHp;
-        for (const a of adjacent) {
-          hp = Math.max(0, hp - a.attack);
-          pushEvent(`${a.emoji} ${a.name} attacks you for ${a.attack} damage!`, 'warning');
-        }
+        hp = Math.max(0, hp - totalDamage);
         if (hp <= 0) {
           if (!isPlayerDead) {
             setIsPlayerDead(true);
