@@ -18,6 +18,11 @@ interface GameRoomProps {
   onToggleStt: () => void;
   sttInterim: string;
   onSignOut?: () => void;
+  localStream: MediaStream | null;
+  remoteStreams: Map<string, MediaStream>;
+  cameraEnabled: boolean;
+  cameraError: string | null;
+  onToggleCamera: () => Promise<void>;
 }
 
 export function GameRoom({
@@ -32,6 +37,11 @@ export function GameRoom({
   onToggleStt,
   sttInterim,
   onSignOut,
+  localStream,
+  remoteStreams,
+  cameraEnabled,
+  cameraError,
+  onToggleCamera,
 }: GameRoomProps) {
   const privateRoomCode = game.roomVisibility === 'private' ? game.roomId : null;
   const [copied, setCopied] = useState(false);
@@ -72,6 +82,19 @@ export function GameRoom({
               📋 {copied ? 'Copied!' : 'Copy room code'}
             </Button>
           )}
+          {/* Camera toggle */}
+          <button
+            type="button"
+            onClick={onToggleCamera}
+            title={cameraEnabled ? 'Turn off camera' : 'Turn on camera'}
+            className={`px-2 py-1.5 rounded-lg border transition-colors text-xs ${
+              cameraEnabled
+                ? 'border-gp-accent bg-gp-accent/20 text-gp-mint'
+                : 'border-gp-accent/20 text-gp-mint/50 hover:text-gp-mint/80 hover:border-gp-accent/40'
+            }`}
+          >
+            {cameraEnabled ? '📹' : '📷'}
+          </button>
           {onSignOut && (
             <button
               type="button"
@@ -82,6 +105,22 @@ export function GameRoom({
             </button>
           )}
         </header>
+
+        {/* Camera error */}
+        {cameraError && (
+          <div className="px-4 py-1.5 bg-red-900/30 border-b border-red-800/40 text-red-300 text-xs">
+            {cameraError}
+          </div>
+        )}
+
+        {/* Camera strip – shown whenever at least one participant has a stream */}
+        {(localStream || remoteStreams.size > 0) && (
+          <CameraStrip
+            game={game}
+            localStream={localStream}
+            remoteStreams={remoteStreams}
+          />
+        )}
 
         {/* Phase views */}
         {game.phase === 'waiting' && <WaitingView game={game} onStartGame={onStartGame} />}
@@ -105,6 +144,80 @@ export function GameRoom({
       {game.phase === 'finished' && showReplayModal && (
         <ChatReplayPage game={game} onClose={() => setShowReplayModal(false)} />
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Camera strip
+// ---------------------------------------------------------------------------
+
+interface CameraStripProps {
+  game: DsiGameState;
+  localStream: MediaStream | null;
+  remoteStreams: Map<string, MediaStream>;
+}
+
+function CameraStrip({ game, localStream, remoteStreams }: CameraStripProps) {
+  return (
+    <div
+      className="flex gap-2 px-3 py-2 overflow-x-auto border-b border-gp-accent/20 bg-gp-bg/60 gp-scrollbar"
+      role="region"
+      aria-label="Camera feeds"
+      tabIndex={0}
+    >
+      {localStream && (
+        <VideoTile
+          stream={localStream}
+          label="You"
+          mirrored
+        />
+      )}
+      {game.players
+        .filter((p) => p.id !== game.localPlayerId && remoteStreams.has(p.id))
+        .map((p) => (
+          <VideoTile
+            key={p.id}
+            stream={remoteStreams.get(p.id)!}
+            label={p.name}
+          />
+        ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Video tile
+// ---------------------------------------------------------------------------
+
+interface VideoTileProps {
+  stream: MediaStream;
+  label: string;
+  mirrored?: boolean;
+}
+
+function VideoTile({ stream, label, mirrored = false }: VideoTileProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && videoRef.current.srcObject !== stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  return (
+    <div className="relative flex-shrink-0 w-24 h-[72px] rounded-lg overflow-hidden bg-gp-surface/40 border border-gp-accent/20">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        aria-label={`${label}'s camera`}
+        className={`w-full h-full object-cover ${mirrored ? 'scale-x-[-1]' : ''}`}
+      />
+      <span className="absolute bottom-0.5 left-0 right-0 text-center text-[9px] text-white/80 bg-black/40 truncate px-1">
+        {label}
+      </span>
     </div>
   );
 }

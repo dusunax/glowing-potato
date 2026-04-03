@@ -2,6 +2,7 @@
 // Routes between the room lobby and an active game room.
 
 import { useDontSayIt } from '../hooks/useDontSayIt';
+import { useWebRTC } from '../hooks/useWebRTC';
 import { RoomLobby } from './RoomLobby';
 import { GameRoom } from './GameRoom';
 import { Button } from '@glowing-potato/ui';
@@ -32,6 +33,11 @@ export function DontSayIt({ onBack, nickname, isLoggedIn, onSignIn, onSignOut, o
     toggleStt,
     sttInterim,
   } = useDontSayIt();
+
+  const { localStream, remoteStreams, cameraEnabled, cameraError, toggleCamera } = useWebRTC(
+    game?.roomId ?? null,
+    game?.localPlayerId ?? null,
+  );
 
   async function handleSignOut() {
     if (game) await leaveRoom();
@@ -70,6 +76,11 @@ export function DontSayIt({ onBack, nickname, isLoggedIn, onSignIn, onSignOut, o
         onToggleStt={toggleStt}
         sttInterim={sttInterim}
         onSignOut={handleSignOut}
+        localStream={localStream}
+        remoteStreams={remoteStreams}
+        cameraEnabled={cameraEnabled}
+        cameraError={cameraError}
+        onToggleCamera={toggleCamera}
       />
     );
   }
