@@ -17,11 +17,11 @@ const RARITY_BADGE_MAP: Record<string, 'default' | 'success' | 'warning' | 'mute
 
 export function DiscoveryPanel({ discovered }: DiscoveryPanelProps) {
   return (
-    <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4 flex flex-col h-full">
+    <div className="flex flex-col">
       <CardTitle className="mb-0.5">📖 Discovery Journal</CardTitle>
       {/* text-gp-mint/70 on gp-surface: ~3.65:1 — acceptable for uppercase tracking hint ✓ */}
       <p className="text-xs text-gp-mint/70 mb-3">{discovered.size}/{ITEMS.length} found</p>
-      <div className="grid grid-cols-2 gap-2 overflow-y-auto flex-1">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 overflow-y-auto">
         {ITEMS.map((item) => {
           const found = discovered.has(item.id);
           return (

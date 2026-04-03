@@ -15,6 +15,17 @@ export const RECIPES: Recipe[] = [
     result: { itemId: 'four_leaf_clover', quantity: 1 },
   },
   {
+    id: 'hunter_stew',
+    name: 'Hunter Stew',
+    description: 'A hearty stew cooked from game meat and mushrooms.',
+    ingredients: [
+      { itemId: 'raw_meat', quantity: 1 },
+      { itemId: 'mushroom', quantity: 1 },
+      { itemId: 'raindrop', quantity: 1 },
+    ],
+    result: { itemId: 'hunter_stew', quantity: 1 },
+  },
+  {
     id: 'mushroom_soup',
     name: 'Mushroom Soup',
     description: 'A warm autumnal soup brewed from autumn finds.',
@@ -23,6 +34,17 @@ export const RECIPES: Recipe[] = [
       { itemId: 'raindrop', quantity: 1 },
     ],
     result: { itemId: 'fog_pearl', quantity: 1 },
+  },
+  {
+    id: 'healing_potion',
+    name: 'Healing Potion',
+    description: 'A restorative tonic brewed from moongrass and frostbloom.',
+    ingredients: [
+      { itemId: 'moongrass', quantity: 2 },
+      { itemId: 'frostbloom', quantity: 1 },
+      { itemId: 'raindrop', quantity: 1 },
+    ],
+    result: { itemId: 'healing_potion', quantity: 1 },
   },
   {
     id: 'winter_charm',
