@@ -325,7 +325,7 @@ export function useGameState() {
         return;
       }
       const { message, defeated, animalName, animalEmoji, experience } = result;
-      if (message) pushEvent(message, defeated ? 'success' : 'warning');
+        if (message) pushEvent(message, defeated ? 'success' : 'warning');
       if (defeated) {
         gainExperience(experience);
         pushEvent(`Animal defeated: ${animalName} ${animalEmoji}`, 'success');
