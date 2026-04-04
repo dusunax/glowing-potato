@@ -8,6 +8,7 @@ export interface GameRecord {
   id?: string;
   userId: string;
   nickname?: string;
+  gameId?: string;
   score: number;
   survivalDays: number;
   level: number;

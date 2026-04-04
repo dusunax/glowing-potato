@@ -5,33 +5,31 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
 import { MINI_GAMES } from '../data/minigames';
 import type { MiniGame } from '../types/minigame';
-import { Button, Badge } from '@glowing-potato/ui';
+import { Button } from '@glowing-potato/ui';
 import { UserEditPopup } from './UserEditPopup';
+import { GameLobbyCarouselSection } from './GameLobbyCarouselSection';
 import type { NicknameUpdateResult } from '../hooks/useAuth';
 import { useLeaderboard } from '../hooks/useLeaderboard';
-
-// Fixed card dimensions shared between GameCard and the slot frame overlay.
-const CARD_WIDTH_CLASS = 'w-64';
-const CARD_HEIGHT_CLASS = 'h-72';
+import type { CarouselApi } from '@glowing-potato/ui';
 
 // Per-game introduction content shown in the full-page intro sections.
 const GAME_INTROS: Record<string, { tagline: string; features: { icon: string; text: string }[] }> = {
   'dont-say-it': {
-    tagline: '말하면 지는 멀티플레이어 금칙어 게임',
+    tagline: 'A multiplayer game where saying the forbidden word makes you lose',
     features: [
-      { icon: '🔑', text: '비밀 금칙어를 부여받아요' },
-      { icon: '💬', text: '자유롭게 대화하면서 금칙어를 피해요' },
-      { icon: '🕵️', text: '다른 플레이어의 금칙어를 추리해요' },
-      { icon: '👑', text: '마지막까지 살아남은 플레이어가 승리!' },
+      { icon: '🔑', text: 'Receive a secret banned word' },
+      { icon: '💬', text: 'Talk freely while dodging your forbidden word' },
+      { icon: '🕵️', text: 'Infer other players&apos; forbidden words' },
+      { icon: '👑', text: 'The last player standing wins' },
     ],
   },
   collection: {
-    tagline: '계절을 탐험하는 수집 & 생존 게임',
+    tagline: 'A seasonal collection and survival exploration game',
     features: [
-      { icon: '🗺️', text: '5×5 바이옴 맵을 탐험해요' },
-      { icon: '🍄', text: '계절별 아이템을 채집해요' },
-      { icon: '⚗️', text: '희귀 아이템을 제작해요' },
-      { icon: '📖', text: '발견 일지를 채워 최고 점수에 도전!' },
+      { icon: '🗺️', text: 'Explore an 8×8 biome map' },
+      { icon: '🍄', text: 'Collect seasonal items' },
+      { icon: '⚗️', text: 'Craft rare items' },
+      { icon: '📖', text: 'Fill the discovery log and chase top scores' },
     ],
   },
 };
@@ -45,12 +43,55 @@ interface GameLobbyProps {
   onUpdateNickname?: (nickname: string) => Promise<NicknameUpdateResult>;
 }
 
-export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, onUpdateNickname }: GameLobbyProps) {  const mainGameIndex = MINI_GAMES.findIndex((game) => game.id === 'dont-say-it');
-  const [activeIndex, setActiveIndex] = useState(mainGameIndex >= 0 ? mainGameIndex : 0);
+export function GameLobby({
+  onSelectGame,
+  user,
+  nickname,
+  onSignIn,
+  onSignOut,
+  onUpdateNickname,
+}: GameLobbyProps) {
+  const mainGameIndex = MINI_GAMES.findIndex((game) => game.id === 'dont-say-it');
+  const total = MINI_GAMES.length;
+  const getSafeIndex = (index: number) => {
+    if (total <= 0) return 0;
+    if (index < 0) return 0;
+    if (index > total - 1) return total - 1;
+    return index;
+  };
+
+  const getCarouselIndex = (gameIndex: number) => {
+    if (total <= 0) return 0;
+    return getSafeIndex(gameIndex) + 1;
+  };
+
+  const getGameIndexFromCarouselIndex = (carouselIndex: number) => {
+    if (total <= 0) return 0;
+    if (carouselIndex <= 0) return 0;
+    if (carouselIndex >= total + 1) return total - 1;
+    return carouselIndex - 1;
+  };
+
+  const [activeIndex, setActiveIndex] = useState<number>(() => getSafeIndex(mainGameIndex >= 0 ? mainGameIndex : 0));
   const [spinning, setSpinning] = useState(false);
   const [showUserEdit, setShowUserEdit] = useState(false);
-  const spinIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { records: leaderboard, loading: leaderboardLoading } = useLeaderboard(10);
+  const spinStepRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+
+  const setActiveIndexAndScroll = (nextIndex: number) => {
+    const normalizedIndex = getSafeIndex(nextIndex);
+    setActiveIndex(normalizedIndex);
+    if (carouselApi) {
+      carouselApi.scrollTo(getCarouselIndex(normalizedIndex), true);
+    }
+  };
+
+  const selectedGameId = MINI_GAMES[activeIndex]?.id;
+  const { records: leaderboard, loading: leaderboardLoading } = useLeaderboard(10, selectedGameId);
+  const isDontSayItLeaderboard = selectedGameId === 'dont-say-it';
+  const scoreLabel = isDontSayItLeaderboard ? 'wins' : 'pts';
   const leaderboardRows = useMemo(() => {
     return Array.from({ length: 10 }, (_, index) => {
       const record = leaderboard[index];
@@ -59,25 +100,54 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
     });
   }, [leaderboard]);
 
-  const total = MINI_GAMES.length;
+  // Clean up any running spin timer on unmount.
+  useEffect(() => {
+    if (!carouselApi) return;
+    const onSelect = () => {
+      const selected = carouselApi.selectedScrollSnap();
+      const nextActive = getGameIndexFromCarouselIndex(selected);
+      if (selected <= 0 || selected >= total + 1) {
+        carouselApi.scrollTo(getCarouselIndex(nextActive), true);
+      }
+      setActiveIndex(nextActive);
+      setCanScrollPrev(nextActive > 0);
+      setCanScrollNext(nextActive < total - 1);
+    };
+    carouselApi.on('select', onSelect);
+    carouselApi.on('reInit', onSelect);
+    onSelect();
+    return () => {
+      carouselApi.off('select', onSelect);
+      carouselApi.off('reInit', onSelect);
+    };
+  }, [carouselApi]);
 
-  // Clean up any running spin interval on unmount.
+  useEffect(() => {
+    if (!carouselApi) return;
+    const target = getCarouselIndex(activeIndex);
+    if (carouselApi.selectedScrollSnap() !== target) {
+      carouselApi.scrollTo(target, true);
+    }
+  }, [carouselApi, activeIndex, total]);
+
   useEffect(() => {
     return () => {
-      if (spinIntervalRef.current !== null) {
-        clearInterval(spinIntervalRef.current);
+      if (spinStepRef.current !== null) {
+        clearTimeout(spinStepRef.current);
       }
     };
   }, []);
 
   function prev() {
     if (spinning) return;
-    setActiveIndex((i) => (i - 1 + total) % total);
+    if (!canScrollPrev) return;
+    setActiveIndexAndScroll(activeIndex - 1);
   }
 
   function next() {
     if (spinning) return;
-    setActiveIndex((i) => (i + 1) % total);
+    if (!canScrollNext) return;
+    setActiveIndexAndScroll(activeIndex + 1);
   }
 
   function handleSpin() {
@@ -85,15 +155,36 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
     setSpinning(true);
     let ticks = 0;
     const maxTicks = 12 + Math.floor(Math.random() * 8);
-    spinIntervalRef.current = setInterval(() => {
-      setActiveIndex((i) => (i + 1) % total);
+    const step = () => {
+      setActiveIndex((current) => {
+        const next = getSafeIndex(current + 1);
+        if (carouselApi) {
+          carouselApi.scrollTo(getCarouselIndex(next), true);
+        }
+        return next;
+      });
       ticks++;
       if (ticks >= maxTicks) {
-        clearInterval(spinIntervalRef.current!);
-        spinIntervalRef.current = null;
+        if (spinStepRef.current !== null) clearTimeout(spinStepRef.current);
+        spinStepRef.current = null;
         setSpinning(false);
+        setActiveIndex((i) => {
+          if (total <= 1) return i;
+          let next = i;
+          while (next === i) {
+            next = Math.floor(Math.random() * total);
+          }
+          if (carouselApi) {
+            carouselApi.scrollTo(getCarouselIndex(next), true);
+          }
+          return next;
+        });
+        return;
       }
-    }, 80);
+      const delay = 80 + ticks * 8;
+      spinStepRef.current = setTimeout(step, delay);
+    };
+    spinStepRef.current = setTimeout(step, 0);
   }
 
   function handlePlay(game: MiniGame) {
@@ -102,12 +193,11 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
   }
 
   const active = MINI_GAMES[activeIndex];
-  const prevGame = MINI_GAMES[(activeIndex - 1 + total) % total];
-  const nextGame = MINI_GAMES[(activeIndex + 1) % total];
   const userDisplayName = user ? (nickname || user.displayName || '') : '';
 
+
   return (
-    <div className="bg-gp-bg">
+    <div className="bg-gp-bg h-screen overflow-y-auto scroll-smooth">
       {/* Fixed top-right auth controls — always visible while scrolling */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-gp-bg/80 backdrop-blur-sm rounded-full px-1 py-1">
         {user ? (
@@ -159,237 +249,137 @@ export function GameLobby({ onSelectGame, user, nickname, onSignIn, onSignOut, o
         />
       )}
 
-      {/* === Section 1: Lobby carousel === */}
-      <section className="min-h-screen flex flex-col items-center justify-center p-6 relative">
-        {/* Header */}
-        <header className="text-center mb-10">
-        <p className="text-xs font-semibold tracking-widest text-gp-accent uppercase mb-2">
-          Mini-Game Arcade
-        </p>
-        <h1 className="text-4xl font-bold text-gp-mint tracking-tight">
-          🎰 Pick Your Game
-        </h1>
-        <p className="text-gp-accent mt-2 text-sm">
-          Spin to discover a game, or choose from the list below
-        </p>
-      </header>
+      <GameLobbyCarouselSection
+        games={MINI_GAMES}
+        activeIndex={activeIndex}
+        spinning={spinning}
+        canScrollPrev={canScrollPrev}
+        canScrollNext={canScrollNext}
+        startIndex={getCarouselIndex(mainGameIndex >= 0 ? mainGameIndex : 0)}
+        setCarouselApi={setCarouselApi}
+        onSelectIndex={setActiveIndexAndScroll}
+        onPrev={prev}
+        onNext={next}
+        onSpin={handleSpin}
+        onPlay={handlePlay}
+      />
 
-      {/* Slot machine carousel */}
-      <div className="w-full max-w-3xl">
-        {/* Track — all three cards share the same fixed size */}
-        <div className="relative flex items-center justify-center gap-4 mb-6 select-none">
-          {/* Left ghost card */}
-          <div className="hidden sm:block flex-shrink-0 opacity-35 transition-opacity duration-300">
-            <GameCard game={prevGame} />
-          </div>
-
-          {/* Active card */}
-          <div
-            className={`flex-shrink-0 transition-opacity duration-150 ${
-              spinning ? 'opacity-60' : 'opacity-100'
-            }`}
-          >
-            <GameCard game={active} active />
-          </div>
-
-          {/* Right ghost card */}
-          <div className="hidden sm:block flex-shrink-0 opacity-35 transition-opacity duration-300">
-            <GameCard game={nextGame} />
-          </div>
-
-          {/* Slot frame overlay — same dimensions as GameCard */}
-          <div className={`absolute inset-y-0 left-1/2 -translate-x-1/2 ${CARD_WIDTH_CLASS} pointer-events-none rounded-2xl ring-1 ring-gp-mint/20`} />
-        </div>
-
-        {/* Dot indicators */}
-        <div className="flex justify-center gap-2 mb-6">
-          {MINI_GAMES.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => !spinning && setActiveIndex(i)}
-              className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                i === activeIndex
-                  ? 'bg-gp-mint scale-125'
-                  : 'bg-gp-accent/40 hover:bg-gp-accent'
-              }`}
-              aria-label={`Go to game ${i + 1}`}
-            />
-          ))}
-        </div>
-
-        {/* Controls */}
-        <div className="flex justify-center items-center gap-3">
-          <Button
-            variant="secondary"
-            size="icon"
-            onClick={prev}
-            disabled={spinning}
-            aria-label="Previous game"
-          >
-            ◀
-          </Button>
-
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={handleSpin}
-            disabled={spinning}
-          >
-            {spinning ? '🎰 Spinning…' : '🎰 Spin'}
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="icon"
-            onClick={next}
-            disabled={spinning}
-            aria-label="Next game"
-          >
-            ▶
-          </Button>
-        </div>
-
-        {/* Play / Coming-soon action */}
-        <div className="flex justify-center mt-5">
-          {active.status === 'available' ? (
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => handlePlay(active)}
-              className="min-w-48"
-            >
-              ▶ Play {active.name}
-            </Button>
-          ) : (
-            /* text-gp-mint/50 on near-gp-bg background: sufficient contrast ✓ */
-            <span className="px-6 py-3 rounded-xl text-sm font-semibold text-gp-mint/50 bg-gp-surface/30 border border-gp-accent/20">
-              🔒 Coming Soon
-            </span>
-          )}
-        </div>
+      {/* === Sections 2+: per-game introduction (100vh each) === */}
+      <div>
+        {MINI_GAMES.filter((g) => g.status === 'available').map((game) => (
+          <GameIntroSection
+            key={game.id}
+            game={game}
+            intro={GAME_INTROS[game.id]}
+            onPlay={() => onSelectGame(game.id)}
+            user={user}
+            onSignIn={onSignIn}
+          />
+        ))}
       </div>
 
-      {/* All games grid */}
-        <div className="mt-12 w-full max-w-3xl">
-          <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
-            All Games
-          </h2>
-          <div className="flex justify-center gap-3">
-            {MINI_GAMES.map((game, i) => (
-              <button
-                key={game.id}
-                onClick={() => !spinning && setActiveIndex(i)}
-                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-150 w-32 ${
-                  i === activeIndex
-                    ? 'border-gp-mint/50 bg-gp-surface'
-                    : 'border-gp-accent/20 bg-gp-surface/30 hover:border-gp-accent/50 hover:bg-gp-surface/60'
-                }`}
-              >
-                <span className="text-2xl">{game.emoji}</span>
-                <span className="text-xs text-gp-mint font-medium text-center leading-tight">
-                  {game.name}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-      {/* Leaderboard */}
-        <div className="mt-12 w-full max-w-3xl">
-          <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
-            🏆 Leaderboard — Glowing Potato
-          </h2>
-          {leaderboardLoading ? (
-            <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
-              {Array.from({ length: 10 }).map((_, index) => (
-                <div
-                  key={`leaderboard-skeleton-${index}`}
-                  className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
-                    index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
-                  }`}
-                >
-                  <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(index)}`}>
-                    {getRankLabel(index)}
-                  </span>
-                  <div className="h-3 flex-1 rounded bg-gp-accent/20 animate-pulse" />
-                  <div className="h-3 w-20 rounded bg-gp-accent/20 animate-pulse" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
-              {leaderboardRows.map((row) => {
-                if (row.type === 'record') {
-                  const record = row.record;
-                  return (
-                    <div
-                      key={record.id ?? row.index}
-                      className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
-                        row.index === 0 ? 'bg-gp-bg/75' : 'bg-gp-surface/65'
-                      }`}
-                    >
-                      <span className={`w-6 text-center font-bold ${getRankColorClass(row.index)}`}>
-                        {getRankLabel(row.index)}
-                      </span>
-                      <span className="flex-1 font-medium text-gp-mint truncate">{record.displayName}</span>
-                      <span className="font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
-                      <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
-                      <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={`empty-slot-${row.index}`}
-                    className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
-                      row.index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
-                    }`}
-                  >
-                    <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(row.index)}`}>
-                      {getRankLabel(row.index)}
-                    </span>
-                    <span className="flex-1 font-medium text-gp-mint/40">-</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {!user && (
-            <p className="text-center text-gp-mint/40 text-xs mt-3">
-              Sign in with Google to save your scores.
-            </p>
-          )}
-        </div>
-
-        {/* Scroll-down hint */}
-        <div className="mt-10 mb-4 flex flex-col items-center gap-1 animate-bounce">
-          <span className="text-gp-mint/30 text-xs tracking-widest uppercase">게임 소개 보기</span>
-          <span className="text-gp-mint/30 text-lg">↓</span>
+      {/* === All Games === */}
+      <section className="px-6 pb-16 max-w-3xl mx-auto w-full">
+        <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
+          All Games
+        </h2>
+        <div className="flex justify-center gap-3 flex-wrap">
+          {MINI_GAMES.map((game, i) => (
+            <button
+              key={game.id}
+              type="button"
+              onClick={() => !spinning && setActiveIndexAndScroll(i)}
+              className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-200 w-32 ${
+                i === activeIndex
+                  ? 'border-gp-mint/50 bg-gp-surface'
+                  : 'border-gp-accent/20 bg-gp-surface/30 hover:border-gp-accent/50 hover:bg-gp-surface/60'
+              }`}
+            >
+              <span className="text-2xl">{game.emoji}</span>
+              <span className="text-xs text-gp-mint font-medium text-center leading-tight">
+                {game.name}
+              </span>
+            </button>
+          ))}
         </div>
       </section>
 
-      {/* === Sections 2+: per-game introduction (100vh each) === */}
-      {MINI_GAMES.filter((g) => g.status === 'available').map((game) => (
-        <GameIntroSection
-          key={game.id}
-          game={game}
-          intro={GAME_INTROS[game.id]}
-          onPlay={() => onSelectGame(game.id)}
-          user={user}
-          onSignIn={onSignIn}
-        />
-      ))}
+      {/* === Leaderboard (bottom) === */}
+      <section className="px-6 pb-16 w-full max-w-3xl mx-auto">
+        <h2 className="text-xs font-semibold text-gp-accent uppercase tracking-widest mb-4 text-center">
+          🏆 Leaderboard — {active?.name ?? 'Game'}
+        </h2>
+        {leaderboardLoading ? (
+          <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
+            {Array.from({ length: 10 }).map((_, index) => (
+              <div
+                key={`leaderboard-skeleton-${index}`}
+                className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                  index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
+                }`}
+              >
+                <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(index)}`}>
+                  {getRankLabel(index)}
+                </span>
+                <div className="h-3 flex-1 rounded bg-gp-accent/20 animate-pulse" />
+                <div className="h-3 w-20 rounded bg-gp-accent/20 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border-2 border-gp-accent/40 bg-gp-surface/90 overflow-hidden">
+            {leaderboardRows.map((row) => {
+              if (row.type === 'record') {
+                const record = row.record;
+                return (
+                  <div
+                    key={record.id ?? row.index}
+                    className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                      row.index === 0 ? 'bg-gp-bg/75' : 'bg-gp-surface/65'
+                    }`}
+                  >
+                    <span className={`w-6 text-center font-bold ${getRankColorClass(row.index)}`}>
+                      {getRankLabel(row.index)}
+                    </span>
+                    <span className="flex-1 font-medium text-gp-mint truncate">{record.displayName}</span>
+                    <span className="font-bold text-gp-mint">{record.score.toLocaleString()} {scoreLabel}</span>
+                    {!isDontSayItLeaderboard && (
+                      <>
+                        <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
+                        <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>
+                      </>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={`empty-slot-${row.index}`}
+                  className={`flex items-center gap-3 px-4 py-3 text-sm border-b border-gp-accent/10 last:border-b-0 ${
+                    row.index === 0 ? 'bg-gp-bg/55' : 'bg-gp-surface/45'
+                  }`}
+                >
+                  <span className={`w-6 text-center font-bold text-gp-mint/40 ${getRankColorClass(row.index)}`}>
+                    {getRankLabel(row.index)}
+                  </span>
+                  <span className="flex-1 font-medium text-gp-mint/40">-</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {!user && (
+          <p className="text-center text-gp-mint/40 text-xs mt-3">
+            Sign in with Google to save your scores.
+          </p>
+        )}
+      </section>
     </div>
   );
 }
 
 // --- Sub-component ---
-
-interface GameCardProps {
-  game: MiniGame;
-  active?: boolean;
-}
 
 function getRankColorClass(rank: number): string {
   if (rank === 0) return 'text-yellow-400';
@@ -403,38 +393,6 @@ function getRankLabel(rank: number): string {
   if (rank === 1) return '🥈';
   if (rank === 2) return '🥉';
   return `${rank + 1}`;
-}
-
-// Fixed dimensions so ghost and active cards are always the same size.
-function GameCard({ game, active = false }: GameCardProps) {
-  return (
-    <div
-      className={`${CARD_WIDTH_CLASS} ${CARD_HEIGHT_CLASS} rounded-2xl p-6 flex flex-col items-center justify-center gap-3 border transition-colors duration-200 ${
-        active
-          ? 'bg-gp-surface border-gp-accent/60'
-          : 'bg-gp-surface/50 border-gp-accent/20'
-      }`}
-      style={
-        active
-          ? { boxShadow: `0 0 32px ${game.color}33` }
-          : undefined
-      }
-    >
-      <span className="text-5xl">{game.emoji}</span>
-      <div className="text-center">
-        <div className="font-semibold text-gp-mint text-base leading-tight">
-          {game.name}
-        </div>
-        {/* text-gp-mint/85 on gp-surface: ~4.55:1 — passes WCAG AA for small text ✓ */}
-        <div className="text-gp-mint/85 text-xs mt-1.5 leading-snug line-clamp-3">
-          {game.description}
-        </div>
-      </div>
-      {game.status === 'available' && active && (
-        <Badge label="● Available" variant="success" />
-      )}
-    </div>
-  );
 }
 
 // --- GameIntroSection ---
