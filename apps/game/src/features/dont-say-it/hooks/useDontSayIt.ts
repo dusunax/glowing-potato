@@ -13,7 +13,7 @@ import {
   set,
   remove,
 } from 'firebase/database';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, increment, serverTimestamp, setDoc } from 'firebase/firestore';
 import type {
   DsiRoomSummary,
   DsiPlayer,
@@ -88,6 +88,8 @@ const RTDB_ROOMS_PATH = `${RTDB_GAME_PATH}/rooms`;
 const FIRESTORE_HISTORY_COLLECTION = 'game_histories';
 const FIRESTORE_HISTORY_GAME_TYPE = 'dont_say_it';
 const FIRESTORE_HISTORY_DOC_COLLECTION = 'rooms';
+const DONT_SAY_IT_LEADERBOARD_GAME_ID = 'dont-say-it';
+const DONT_SAY_IT_RECORD_COLLECTION = 'records';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,6 +106,7 @@ interface DbPlayer {
   isOut: boolean;
   isBot: boolean;
   wordSlots: DbWordSlot[];
+  isInRoom?: boolean;
 }
 
 interface DbVoteMap {
@@ -169,6 +172,11 @@ function randomRoomId(length = 6) {
     result += ROOM_ID_CHARS[idx];
   }
   return result;
+}
+
+function firstPlayerId(players: Record<string, DbPlayer>): string | null {
+  const id = Object.keys(players)[0];
+  return id ? id : null;
 }
 
 function sanitizePlayerName(name: string) {
@@ -252,8 +260,11 @@ function resolveWordSlot(slot: DsiWordSlot, votesByWord: number[]): DsiWordSlot 
 }
 
 function containsWord(text: string, word: string): boolean {
-  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+  const normalize = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalizedWord = normalize(word);
+  const normalizedText = normalize(text);
+  if (!normalizedWord || !normalizedText) return false;
+  return normalizedText.includes(normalizedWord);
 }
 
 function getUniqueOutOrder(messages: DsiChatMessage[]): string[] {
@@ -342,9 +353,21 @@ function derivePlayerRows(
       name: player.name,
       isOut: player.isOut,
       isBot: player.isBot,
+      isInRoom: player.isInRoom,
       wordSlots: nextWordSlots,
     };
   });
+}
+
+function markPlayersInRoom(players: Record<string, DbPlayer>, isInRoom: boolean): Record<string, DbPlayer> {
+  const nextPlayers: Record<string, DbPlayer> = {};
+  Object.entries(players).forEach(([id, player]) => {
+    nextPlayers[id] = {
+      ...player,
+      isInRoom,
+    };
+  });
+  return nextPlayers;
 }
 
 function resolveAllPlayerSlots(players: Record<string, DbPlayer>, votes: DbVoteMap | undefined): Record<string, DbPlayer> {
@@ -382,6 +405,7 @@ export interface UseDontSayItReturn {
   joinPrivateRoom: (roomId: string, playerName: string) => Promise<'ok' | 'not-found' | 'full'> | 'ok' | 'not-found' | 'full';
   leaveRoom: () => Promise<void> | void;
   startGame: () => Promise<void> | void;
+  restartGame: () => Promise<void> | void;
   game: DsiGameState | null;
   sendMessage: (text: string) => Promise<void> | void;
   castVote: (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => Promise<void> | void;
@@ -396,11 +420,12 @@ export interface UseDontSayItReturn {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useDontSayIt(): UseDontSayItReturn {
+export function useDontSayIt(currentUserId: string | null = null): UseDontSayItReturn {
   const [rooms, setRooms] = useState<DsiRoomSummary[]>([]);
   const [game, setGame] = useState<DsiGameState | null>(null);
   const [localRoomId, setLocalRoomId] = useState<string | null>(null);
   const [localPlayerId, setLocalPlayerId] = useState<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(currentUserId);
 
   const [sttActive, setSttActive] = useState(false);
   const [sttInterim, setSttInterim] = useState('');
@@ -419,6 +444,10 @@ export function useDontSayIt(): UseDontSayItReturn {
   const onDisconnectRef = useRef<ReturnType<typeof onDisconnect> | null>(null);
   const roomCleanupDisconnectRef = useRef<ReturnType<typeof onDisconnect> | null>(null);
   const finishedGameArchiveRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
   useEffect(() => {
     if (!hasRealtimeDbConfig() || !db) return;
 
@@ -547,14 +576,77 @@ export function useDontSayIt(): UseDontSayItReturn {
       } catch (error) {
         console.error('Failed to save finished game history to game_histories/dont_say_it/rooms', error);
       }
+
+      if (targetGame.winnerId && targetGame.winnerId === targetGame.localPlayerId) {
+        const winner = targetGame.players.find((player) => player.id === targetGame.winnerId);
+        const winnerUserId = currentUserIdRef.current
+          ? currentUserIdRef.current
+          : `guest-${targetGame.localPlayerId}`;
+        const safeWinnerUserId = String(winnerUserId || '').trim();
+        if (!safeWinnerUserId) return;
+        const leaderboardDoc = doc(
+          firestoreDb,
+          FIRESTORE_HISTORY_COLLECTION,
+          FIRESTORE_HISTORY_GAME_TYPE,
+          DONT_SAY_IT_RECORD_COLLECTION,
+          safeWinnerUserId,
+        );
+        try {
+          await setDoc(
+            leaderboardDoc,
+            {
+              userId: safeWinnerUserId,
+              nickname: winner?.name,
+              gameId: DONT_SAY_IT_LEADERBOARD_GAME_ID,
+              score: increment(1),
+              survivalDays: 0,
+              level: 1,
+              totalXpGained: 0,
+              defeatedAnimals: [],
+              inventorySnapshot: [],
+              createdAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        } catch (error) {
+          console.error('Failed to save winner record to game_histories/dont_say_it/records (increment)', {
+            code: typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: string }).code : 'unknown',
+            message: error instanceof Error ? error.message : String(error),
+            winnerUserId: safeWinnerUserId,
+          });
+          try {
+            await setDoc(
+              leaderboardDoc,
+              {
+                userId: safeWinnerUserId,
+                nickname: winner?.name,
+                gameId: DONT_SAY_IT_LEADERBOARD_GAME_ID,
+                score: 1,
+                survivalDays: 0,
+                level: 1,
+                totalXpGained: 0,
+                defeatedAnimals: [],
+                inventorySnapshot: [],
+                createdAt: serverTimestamp(),
+              },
+              { merge: true },
+            );
+            console.info('Recovered winner record save by writing base winner entry.');
+          } catch (fallbackError) {
+            console.error('Failed to save winner record to game_histories/dont_say_it/records (fallback payload)', {
+              code:
+                typeof fallbackError === 'object' && fallbackError !== null && 'code' in fallbackError
+                  ? (fallbackError as { code?: string }).code
+                  : 'unknown',
+              message: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+              winnerUserId: safeWinnerUserId,
+            });
+          }
+        }
+      }
     }
 
     if (!db) return;
-    try {
-      await remove(ref(db, roomPath(targetGame.roomId)));
-    } catch (error) {
-      console.error('Failed to delete room after game finished', error);
-    }
   }, [db, firestoreDb]);
 
   const refreshLocalPlayer = useCallback(() => {
@@ -564,12 +656,6 @@ export function useDontSayIt(): UseDontSayItReturn {
   useEffect(() => {
     refreshLocalPlayer();
   }, [refreshLocalPlayer]);
-
-  useEffect(() => {
-    return () => {
-      void clearDisconnectCleanup();
-    };
-  }, [clearDisconnectCleanup]);
 
   useEffect(() => {
     if (!db || !localRoomId) {
@@ -598,16 +684,18 @@ export function useDontSayIt(): UseDontSayItReturn {
       const playersMap = payload.players ?? {};
       const playerCount = Object.keys(playersMap).length;
 
+      const resolvedHostId = playersMap[payload.hostId] ? payload.hostId : firstPlayerId(playersMap);
+      const isSinglePlayerInRoom = playerCount === 1 && !!localPlayerId && !!playersMap[localPlayerId];
       const isFinalHost =
         !!(
           localPlayerId &&
-          payload.hostId === localPlayerId &&
+          resolvedHostId === localPlayerId &&
           playerCount === 1 &&
           payload.phase !== 'finished'
         );
       if (isFinalHost) {
         void setRoomCleanupDisconnect(localRoomId);
-      } else {
+      } else if (!isSinglePlayerInRoom) {
         void clearRoomCleanupDisconnect();
       }
 
@@ -633,7 +721,7 @@ export function useDontSayIt(): UseDontSayItReturn {
           if (!current || !current.players) return current;
           const hostId = current.hostId;
           if (hostId && current.players[hostId]) return current;
-          const nextHostId = Object.keys(current.players)[0];
+          const nextHostId = firstPlayerId(current.players);
           if (!nextHostId) return null;
           return {
             ...current,
@@ -648,8 +736,7 @@ export function useDontSayIt(): UseDontSayItReturn {
         .sort((a, b) => a.timestamp - b.timestamp);
       const selectedLocalId = localPlayerId;
       const localPlayer = players.find((p) => p.id === selectedLocalId);
-
-      setGame({
+      const baseGame: DsiGameState = {
         phase: payload.phase,
         roomId: localRoomId,
         roomTitle: payload.title,
@@ -663,6 +750,28 @@ export function useDontSayIt(): UseDontSayItReturn {
         votingTimeLeft: payload.votingTimeLeft,
         gameTimeLeft: payload.gameTimeLeft,
         winnerId: payload.winnerId,
+      };
+
+      if (payload.phase === 'finished' && localPlayer?.isInRoom) {
+        setGame({
+          ...baseGame,
+          phase: 'waiting',
+          winnerId: null,
+          votingTimeLeft: VOTING_SECONDS,
+          gameTimeLeft: PLAY_SECONDS,
+          messages: [],
+          players: players.map((player) => ({
+            ...player,
+            isOut: false,
+            isInRoom: player.isInRoom,
+            wordSlots: hiddenWordSlots(),
+          })),
+        });
+        return;
+      }
+
+      setGame({
+        ...baseGame,
       });
 
       if (!localPlayer) {
@@ -724,9 +833,11 @@ export function useDontSayIt(): UseDontSayItReturn {
 
         const alivePlayerIds = Object.entries(current.players ?? {}).filter(([, player]) => !player.isOut).map(([id]) => id);
         const winnerId = alivePlayerIds.length === 1 ? alivePlayerIds[0] : null;
+        const nextPlayers = markPlayersInRoom(current.players ?? {}, false);
         return {
           ...current,
           phase: 'finished',
+          players: nextPlayers,
           gameTimeLeft: 0,
           winnerId,
         };
@@ -778,6 +889,7 @@ export function useDontSayIt(): UseDontSayItReturn {
             name: normalizedPlayerName,
             isOut: false,
             isBot: false,
+            isInRoom: true,
             wordSlots: hiddenWordSlots(),
           },
         },
@@ -814,6 +926,7 @@ export function useDontSayIt(): UseDontSayItReturn {
             name: normalizedName,
             isOut: false,
             isBot: false,
+            isInRoom: true,
             wordSlots: hiddenWordSlots(),
           };
           current.players = players;
@@ -821,6 +934,7 @@ export function useDontSayIt(): UseDontSayItReturn {
         }
         players[playerId] = {
           ...players[playerId],
+          isInRoom: true,
           name: normalizedName,
         };
         current.players = players;
@@ -863,30 +977,62 @@ export function useDontSayIt(): UseDontSayItReturn {
   const startGame = useCallback(async () => {
     if (!db || !localRoomId || !localPlayerId) return;
     const roomRef = ref(db, roomPath(localRoomId));
-    await runTransaction(roomRef, (current: DbRoom | null) => {
-      if (!current) return current;
-      if (current.hostId !== localPlayerId) return current;
-      if (current.phase !== 'waiting') return current;
-      const playerIds = Object.keys(current.players ?? {});
-      if (playerIds.length < MIN_PLAYERS) return current;
+    try {
+      const result = await runTransaction(roomRef, (current: DbRoom | null) => {
+        if (!current) return current;
+        if (current.hostId !== localPlayerId) return current;
+        if (current.phase !== 'waiting' && current.phase !== 'finished') return current;
+        const inRoomPlayerIds = Object.entries(current.players ?? {}).filter(([, player]) => player.isInRoom !== false);
+        if (inRoomPlayerIds.length < MIN_PLAYERS) return current;
 
-      const allAssigned: string[] = [];
-      const nextPlayers: Record<string, DbPlayer> = {};
-      Object.entries(current.players).forEach(([id, player]) => {
-        nextPlayers[id] = {
-          ...player,
-          wordSlots: buildWordSlots(allAssigned),
+        const allAssigned: string[] = [];
+        const nextPlayers: Record<string, DbPlayer> = {};
+        Object.entries(current.players).forEach(([id, player]) => {
+          nextPlayers[id] = {
+            ...player,
+            isOut: false,
+            isInRoom: true,
+            wordSlots: buildWordSlots(allAssigned),
+          };
+        });
+        return {
+          ...current,
+          phase: 'voting',
+          winnerId: null,
+          votingTimeLeft: VOTING_SECONDS,
+          gameTimeLeft: PLAY_SECONDS,
+          players: nextPlayers,
+          messages: {},
+          votes: {},
         };
       });
-      return {
-        ...current,
-        phase: 'voting',
-        votingTimeLeft: VOTING_SECONDS,
-        votes: {},
-        players: nextPlayers,
-      };
-    });
+
+      if (!result.committed) {
+        console.warn('Failed to start game (not committed).', {
+          roomId: localRoomId,
+          playerId: localPlayerId,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to start game transaction.', {
+        roomId: localRoomId,
+        playerId: localPlayerId,
+        code: typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: string }).code : 'unknown',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }, [db, localPlayerId, localRoomId]);
+
+  const restartGame = useCallback(async () => {
+    if (!localRoomId || !localPlayerId || !game) return;
+    if (db) {
+      try {
+        await set(ref(db, `${roomPath(localRoomId)}/players/${localPlayerId}/isInRoom`), true);
+      } catch (error) {
+        console.error('Failed to mark player as in room', error);
+      }
+    }
+  }, [db, game, localPlayerId, localRoomId]);
 
   const leaveRoom = useCallback(async () => {
     if (!db || !localRoomId || !localPlayerId) {
@@ -924,9 +1070,9 @@ export function useDontSayIt(): UseDontSayItReturn {
         return null;
       }
 
-      const entries = Object.entries(players);
-      const [nextHostId, nextHost] = entries[0];
-      if (current.hostId === localPlayerId && nextHost) {
+      const nextHostId = firstPlayerId(players);
+      const shouldRotateHost = current.hostId === localPlayerId || !(current.hostId in players);
+      if (shouldRotateHost && nextHostId) {
         return {
           ...current,
           hostId: nextHostId,
@@ -1012,9 +1158,10 @@ export function useDontSayIt(): UseDontSayItReturn {
 
         const activePlayerIds = Object.entries(nextPlayers).filter(([, p]) => !p.isOut).map(([id]) => id);
         if (activePlayerIds.length <= 1) {
+          const finishedPlayers = markPlayersInRoom(nextPlayers, false);
           return {
             ...current,
-            players: nextPlayers,
+            players: finishedPlayers,
             phase: 'finished',
             gameTimeLeft: 0,
             winnerId: activePlayerIds[0] ?? null,
@@ -1124,6 +1271,7 @@ export function useDontSayIt(): UseDontSayItReturn {
     joinPrivateRoom,
     leaveRoom,
     startGame,
+    restartGame,
     game,
     sendMessage,
     castVote,
