@@ -11,7 +11,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@glowing-potato/theme": "workspace:*"
+    "@glowing-potato/theme": "workspace:*",
+    "embla-carousel-react": "^8.6.0"
   },
   "peerDependencies": {
     "react": "^19.0.0"

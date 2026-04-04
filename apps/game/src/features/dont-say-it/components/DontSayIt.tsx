@@ -10,12 +10,21 @@ interface DontSayItProps {
   onBack: () => void;
   nickname?: string;
   isLoggedIn?: boolean;
+  currentUserId?: string | null;
   onSignIn?: () => void;
   onSignOut?: () => void;
   onUpdateNickname?: (nickname: string) => Promise<'success' | 'error'>;
 }
 
-export function DontSayIt({ onBack, nickname, isLoggedIn, onSignIn, onSignOut, onUpdateNickname }: DontSayItProps) {
+export function DontSayIt({
+  onBack,
+  nickname,
+  isLoggedIn,
+  currentUserId,
+  onSignIn,
+  onSignOut,
+  onUpdateNickname,
+}: DontSayItProps) {
   const {
     rooms,
     createRoom,
@@ -23,6 +32,7 @@ export function DontSayIt({ onBack, nickname, isLoggedIn, onSignIn, onSignOut, o
     joinPrivateRoom,
     leaveRoom,
     game,
+    restartGame,
     sendMessage,
     startGame,
     castVote,
@@ -31,7 +41,7 @@ export function DontSayIt({ onBack, nickname, isLoggedIn, onSignIn, onSignOut, o
     sttError,
     toggleStt,
     sttInterim,
-  } = useDontSayIt();
+  } = useDontSayIt(currentUserId ?? null);
 
   async function handleSignOut() {
     if (game) await leaveRoom();
@@ -61,6 +71,7 @@ export function DontSayIt({ onBack, nickname, isLoggedIn, onSignIn, onSignOut, o
       <GameRoom
         game={game}
         onLeave={leaveRoom}
+        onRestart={restartGame}
         onSendMessage={sendMessage}
         onStartGame={startGame}
         onCastVote={castVote}
