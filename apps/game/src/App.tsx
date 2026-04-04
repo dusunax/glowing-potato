@@ -22,6 +22,7 @@ import { getItemById } from './data/items';
 import { calculateScore } from './utils/score';
 import { tileKey } from './hooks/useMap';
 import { useLeaderboard } from './hooks/useLeaderboard';
+import { LeaderboardPopup } from './features/leaderboard/LeaderboardPopup';
 import type { ActionCard } from './types/actionCard';
 import type { User } from 'firebase/auth';
 
@@ -127,6 +128,13 @@ function CollectionGame({
 
   const { saveRecord } = useScoreRecord();
   const savedRef = useRef(false);
+  const [showLeaderboardPopup, setShowLeaderboardPopup] = useState(false);
+  const {
+    records: leaderboardRecords,
+    loading: leaderboardLoading,
+    refresh: refreshLeaderboard,
+    invalidate: invalidateLeaderboard,
+  } = useLeaderboard(10, 'collection');
 
   const finalScore = useMemo(() => {
     if (!isPlayerDead) return 0;
@@ -143,19 +151,31 @@ function CollectionGame({
     if (!isPlayerDead || savedRef.current) return;
     savedRef.current = true;
     const recordUserId = user?.uid ?? `guest-${Math.floor(Math.random() * 1000000000)}`;
-    saveRecord({
-      userId: recordUserId,
-      score: finalScore,
-      survivalDays: conditions.day,
-      level: playerLevel,
-      totalXpGained,
-      defeatedAnimals,
-      inventorySnapshot: inventory,
-    });
-    }, [isPlayerDead, user, finalScore, conditions.day, playerLevel, totalXpGained, defeatedAnimals, inventory, saveRecord]);
-
-  const [showLeaderboardPopup, setShowLeaderboardPopup] = useState(false);
-  const { records: leaderboardRecords, loading: leaderboardLoading, refresh: refreshLeaderboard } = useLeaderboard(10);
+    (async () => {
+      await saveRecord({
+        userId: recordUserId,
+        gameId: 'collection',
+        score: finalScore,
+        survivalDays: conditions.day,
+        level: playerLevel,
+        totalXpGained,
+        defeatedAnimals,
+        inventorySnapshot: inventory,
+      });
+      await invalidateLeaderboard();
+    })();
+  }, [
+    isPlayerDead,
+    user,
+    finalScore,
+    conditions.day,
+    playerLevel,
+    totalXpGained,
+    defeatedAnimals,
+    inventory,
+    saveRecord,
+    invalidateLeaderboard,
+  ]);
 
   useEffect(() => {
     if (!showLeaderboardPopup) return;
@@ -179,21 +199,6 @@ function CollectionGame({
     if (rank >= 100) return '100+';
     return String(rank);
   }, [leaderboardRecords, finalScore]);
-
-  function getRankLabel(rank: number): string {
-    if (rank === 0) return '🥇';
-    if (rank === 1) return '🥈';
-    if (rank === 2) return '🥉';
-    return `${rank + 1}`;
-  }
-
-  function getRankColorClass(rank: number): string {
-    if (rank === 0) return 'text-yellow-400';
-    if (rank === 1) return 'text-gp-mint/70';
-    if (rank === 2) return 'text-orange-400';
-    return 'text-gp-mint/60';
-  }
-
 
   const BELT_SLOT_COUNT = 8;
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
@@ -627,77 +632,32 @@ function CollectionGame({
                       <Button variant="primary" size="sm" onClick={onRestart} className="w-full">
                         🔄 Restart
                       </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setShowLeaderboardPopup(true)} className="w-full">
-                        View Leaderboard
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={onBack} className="w-full">
-                        ↩ Return to lobby
-                      </Button>
-                    </div>
-                    {showLeaderboardPopup && (
-                      <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4">
-                        <div className="bg-gp-surface border-2 border-gp-accent/45 rounded-xl p-4 w-full max-w-md max-h-[82vh] flex flex-col shadow-[0_20px_60px_-30px_rgba(14,165,233,0.25)]">
-                          <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-sm font-semibold text-gp-mint">🏆 Leaderboard</h3>
-                            <button
-                              type="button"
-                              onClick={() => setShowLeaderboardPopup(false)}
-                              aria-label="Close leaderboard"
-                              className="w-7 h-7 rounded-md border border-gp-accent/50 text-gp-mint bg-gp-bg/60 hover:bg-gp-accent/20 hover:border-gp-accent transition-colors font-bold text-sm leading-none"
-                            >
-                              ×
-                            </button>
-                          </div>
-                          {leaderboardLoading ? (
-                            <div className="overflow-y-auto max-h-96 space-y-1 pr-1">
-                              {Array.from({ length: 10 }).map((_, index) => (
-                                <div
-                                  key={`leaderboard-skeleton-${index}`}
-                                  className="h-[42px] flex items-center gap-2 px-2 py-2 border border-gp-accent/25 rounded-lg bg-gp-bg/55"
-                                >
-                                  <span className={`w-6 text-center text-sm font-bold ${getRankColorClass(index)}`}>
-                                    {getRankLabel(index)}
-                                  </span>
-                                  <div className="h-3 flex-1 rounded bg-gp-accent/20 animate-pulse" />
-                                  <div className="h-3 w-20 rounded bg-gp-accent/20 animate-pulse" />
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="overflow-y-auto max-h-96 space-y-1 pr-1">
-                              {leaderboardRows.map((row) => {
-                                if (row.type === 'record') {
-                                  const rank = row.index;
-                                  const record = row.record;
-                                  return (
-                                    <div
-                                      key={record.id ?? `${record.displayName}-${record.score}-${rank}`}
-                                      className="flex items-center gap-2 px-2 py-2 border border-gp-accent/25 rounded-lg bg-gp-bg/55"
-                                    >
-                                      <span className={`w-6 text-center text-sm font-bold ${getRankColorClass(rank)}`}>
-                                        {getRankLabel(rank)}
-                                      </span>
-                                      <span className="flex-1 text-left text-xs text-gp-mint truncate">{record.displayName}</span>
-                                      <span className="text-xs font-bold text-gp-mint">{record.score.toLocaleString()} pts</span>
-                                    </div>
-                                  );
-                                }
-
-                                  return (
-                                    <div
-                                      key={`empty-slot-${row.index}`}
-                                      className="flex items-center gap-2 px-2 py-2 border border-dashed border-gp-accent/30 rounded-lg bg-gp-bg/35"
-                                    >
-                                      <span className="w-6 text-center text-sm text-gp-mint/50">{getRankLabel(row.index)}</span>
-                                    <span className="flex-1 text-left text-xs text-gp-mint/40">-</span>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          )}
+                    <Button variant="secondary" size="sm" onClick={() => setShowLeaderboardPopup(true)} className="w-full">
+                      View Leaderboard
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={onBack} className="w-full">
+                      ↩ Return to lobby
+                    </Button>
+                  </div>
+                  <LeaderboardPopup
+                    isOpen={showLeaderboardPopup}
+                    onClose={() => setShowLeaderboardPopup(false)}
+                    title="🏆 Leaderboard"
+                    loading={leaderboardLoading}
+                    rows={leaderboardRows}
+                    scoreSuffix="pts"
+                    renderMeta={(record) => {
+                      const survivalDays = typeof record.survivalDays === 'number' ? record.survivalDays : '-';
+                      const level = typeof record.level === 'number' ? record.level : '-';
+                      if (survivalDays === '-' && level === '-') return null;
+                      return (
+                        <div className="flex items-center gap-2 text-gp-mint/50 text-[10px]">
+                          <span className="hidden sm:block">{`Day ${survivalDays}`}</span>
+                          <span className="hidden sm:block">{`Lv.${level}`}</span>
                         </div>
-                      </div>
-                    )}
+                      );
+                    }}
+                  />
                   </div>
                 )}
                 <div
@@ -777,7 +737,17 @@ export default function App() {
   }
 
   if (activeGame === 'dont-say-it') {
-    return <DontSayIt onBack={() => setActiveGame(null)} nickname={nickname} isLoggedIn={!!user} onSignIn={handleSignIn} onSignOut={signOut} onUpdateNickname={updateNickname} />;
+    return (
+      <DontSayIt
+        onBack={() => setActiveGame(null)}
+        nickname={nickname}
+        isLoggedIn={!!user}
+        currentUserId={user?.uid}
+        onSignIn={handleSignIn}
+        onSignOut={signOut}
+        onUpdateNickname={updateNickname}
+      />
+    );
   }
 
   return (

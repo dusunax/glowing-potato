@@ -3,8 +3,7 @@ import useEmblaCarousel from 'embla-carousel-react';
 
 type CarouselOptions = Parameters<typeof useEmblaCarousel>[0];
 type CarouselPlugins = Parameters<typeof useEmblaCarousel>[1];
-
-export type CarouselApi = ReturnType<typeof useEmblaCarousel>[1];
+export type CarouselApi = NonNullable<ReturnType<typeof useEmblaCarousel>[1]>;
 
 type CarouselContextValue = {
   emblaRef: React.RefCallback<HTMLElement>;
