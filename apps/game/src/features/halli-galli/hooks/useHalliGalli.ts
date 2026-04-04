@@ -296,29 +296,30 @@ export function useHalliGalli(currentUserId: string | null) {
     if (timerIntervalRef.current !== null) return; // already running
 
     const roomRef = ref(db, `${RTDB_ROOMS_PATH}/${game.roomId}`);
-    timerIntervalRef.current = setInterval(async () => {
+    const intervalId = setInterval(async () => {
       const snap = await get(roomRef);
       if (!snap.exists()) {
-        clearInterval(timerIntervalRef.current!);
+        clearInterval(intervalId);
         timerIntervalRef.current = null;
         return;
       }
       const raw = snap.val() as DbRoom;
       if (raw.phase !== 'playing') {
-        clearInterval(timerIntervalRef.current!);
+        clearInterval(intervalId);
         timerIntervalRef.current = null;
         return;
       }
 
       const newTime = (raw.gameTimeLeft ?? 0) - 1;
       if (newTime <= 0) {
-        clearInterval(timerIntervalRef.current!);
+        clearInterval(intervalId);
         timerIntervalRef.current = null;
         await finishGame(raw);
       } else {
         await update(roomRef, { gameTimeLeft: newTime });
       }
     }, 1000);
+    timerIntervalRef.current = intervalId;
 
     return () => {
       if (timerIntervalRef.current !== null) {
@@ -344,7 +345,7 @@ export function useHalliGalli(currentUserId: string | null) {
       const inRoom = players.filter((p) => p.isInRoom);
       const winner =
         inRoom.length > 0
-          ? inRoom.reduce((best, p) => (p.score > best.score ? p : best), inRoom[0]!)
+          ? inRoom.reduce((best, p) => (p.score > best.score ? p : best))
           : null;
 
       const roomRef = ref(db, `${RTDB_ROOMS_PATH}/${localRoomId.current}`);
@@ -590,7 +591,8 @@ export function useHalliGalli(currentUserId: string | null) {
       };
       // Elect new host if needed
       if (raw.hostId === playerId) {
-        updates['hostId'] = remaining[0]![0];
+        const [[newHostId]] = remaining;
+        updates['hostId'] = newHostId;
       }
       await update(roomRef, updates);
     }

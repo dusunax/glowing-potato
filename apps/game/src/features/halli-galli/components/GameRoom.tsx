@@ -28,13 +28,18 @@ interface GameRoomProps {
 // Sub-components
 // ---------------------------------------------------------------------------
 
+const CARD_SIZE_CLASSES: Record<'sm' | 'md' | 'lg', { container: string; text: string }> = {
+  sm: { container: 'w-10 h-14', text: 'text-base' },
+  md: { container: 'w-16 h-20', text: 'text-xl' },
+  lg: { container: 'w-24 h-32', text: 'text-3xl' },
+};
+
 function FruitCard({ code, size = 'md' }: { code: string | null; size?: 'sm' | 'md' | 'lg' }) {
+  const { container, text } = CARD_SIZE_CLASSES[size];
   if (!code) {
-    const dim =
-      size === 'lg' ? 'w-24 h-32' : size === 'md' ? 'w-16 h-20' : 'w-10 h-14';
     return (
       <div
-        className={`${dim} rounded-xl border-2 border-dashed border-gp-surface/40 flex items-center justify-center`}
+        className={`${container} rounded-xl border-2 border-dashed border-gp-surface/40 flex items-center justify-center`}
       >
         <span className="text-gp-mint/20 text-xl">?</span>
       </div>
@@ -43,14 +48,12 @@ function FruitCard({ code, size = 'md' }: { code: string | null; size?: 'sm' | '
   const card = parseCard(code);
   if (!card) return null;
   const emoji = FRUIT_EMOJI[card.fruit];
-  const dim =
-    size === 'lg' ? 'w-24 h-32 text-3xl' : size === 'md' ? 'w-16 h-20 text-xl' : 'w-10 h-14 text-base';
 
   // Arrange fruit emoji in a grid
   const counts = Array.from({ length: card.count }, (_, i) => i);
   return (
     <div
-      className={`${dim} rounded-xl border-2 border-gp-surface bg-gp-bg/80 flex flex-wrap items-center justify-center gap-0.5 p-1 shadow-lg`}
+      className={`${container} ${text} rounded-xl border-2 border-gp-surface bg-gp-bg/80 flex flex-wrap items-center justify-center gap-0.5 p-1 shadow-lg`}
     >
       {counts.map((i) => (
         <span key={i} className="leading-none">
