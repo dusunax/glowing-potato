@@ -60,6 +60,8 @@ export function GameRoom({
               id: record.id,
               displayName: record.displayName,
               score: record.score,
+              survivalDays: 0,
+              level: 0,
             },
           };
         }
@@ -152,7 +154,6 @@ export function GameRoom({
         {game.phase === 'finished' && (
           <FinishedView
             game={game}
-            onLeave={onLeave}
             onRestart={onRestart}
             onShowReplay={() => setShowReplayModal(true)}
             onShowLeaderboard={() => setShowLeaderboardPopup(true)}
@@ -657,13 +658,11 @@ function PlayerWordCard({ player }: { player: DsiPlayer }) {
 
 function FinishedView({
   game,
-  onLeave,
   onRestart,
   onShowReplay,
   onShowLeaderboard,
 }: {
   game: DsiGameState;
-  onLeave: () => void;
   onRestart: () => void;
   onShowReplay: () => void;
   onShowLeaderboard: () => void;
