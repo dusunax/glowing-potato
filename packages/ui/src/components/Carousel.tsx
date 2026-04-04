@@ -4,7 +4,7 @@ import useEmblaCarousel from 'embla-carousel-react';
 type CarouselOptions = Parameters<typeof useEmblaCarousel>[0];
 type CarouselPlugins = Parameters<typeof useEmblaCarousel>[1];
 
-export type CarouselApi = NonNullable<ReturnType<typeof useEmblaCarousel>[1]>;
+export type CarouselApi = ReturnType<typeof useEmblaCarousel>[1];
 
 type CarouselContextValue = {
   emblaRef: React.RefCallback<HTMLElement>;
@@ -35,14 +35,14 @@ const Carousel = React.forwardRef<HTMLDivElement, CarouselProps>(
     const value = React.useMemo(
       () => ({
         emblaRef: emblaRef as React.RefCallback<HTMLElement>,
-        api,
+        api: api ?? null,
         orientation,
       }),
       [api, emblaRef, orientation],
     );
 
     React.useEffect(() => {
-      setApi?.(api);
+      setApi?.(api ?? null);
       return () => {
         setApi?.(null);
       };

@@ -5,7 +5,8 @@ export interface LeaderboardPopupRowRecord {
   id?: string;
   displayName: string;
   score: number;
-  [key: string]: unknown;
+  survivalDays: number;
+  level: number;
 }
 
 export type LeaderboardPopupRow =
