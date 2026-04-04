@@ -23,6 +23,15 @@ const GAME_INTROS: Record<string, { tagline: string; features: { icon: string; t
       { icon: '👑', text: 'The last player standing wins' },
     ],
   },
+  'halli-galli': {
+    tagline: '과일 합계가 5가 되는 순간 가장 빠르게 벨을 울려라!',
+    features: [
+      { icon: '🃏', text: '차례로 과일 카드를 뒤집어요' },
+      { icon: '🔢', text: '한 종류의 과일 합계가 정확히 5개가 되면' },
+      { icon: '🔔', text: '누구보다 빠르게 벨을 눌러요' },
+      { icon: '🏆', text: '90초 후 가장 많이 맞힌 플레이어 승리' },
+    ],
+  },
   collection: {
     tagline: 'A seasonal collection and survival exploration game',
     features: [
@@ -90,8 +99,8 @@ export function GameLobby({
 
   const selectedGameId = MINI_GAMES[activeIndex]?.id;
   const { records: leaderboard, loading: leaderboardLoading } = useLeaderboard(10, selectedGameId);
-  const isDontSayItLeaderboard = selectedGameId === 'dont-say-it';
-  const scoreLabel = isDontSayItLeaderboard ? 'wins' : 'pts';
+  const isWinBasedLeaderboard = selectedGameId === 'dont-say-it' || selectedGameId === 'halli-galli';
+  const scoreLabel = isWinBasedLeaderboard ? 'wins' : 'pts';
   const leaderboardRows = useMemo(() => {
     return Array.from({ length: 10 }, (_, index) => {
       const record = leaderboard[index];
@@ -343,7 +352,7 @@ export function GameLobby({
                     </span>
                     <span className="flex-1 font-medium text-gp-mint truncate">{record.displayName}</span>
                     <span className="font-bold text-gp-mint">{record.score.toLocaleString()} {scoreLabel}</span>
-                    {!isDontSayItLeaderboard && (
+                    {!isWinBasedLeaderboard && (
                       <>
                         <span className="text-gp-mint/50 text-xs hidden sm:block">Day {record.survivalDays}</span>
                         <span className="text-gp-mint/50 text-xs hidden sm:block">Lv.{record.level}</span>

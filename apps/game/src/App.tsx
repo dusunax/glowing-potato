@@ -12,6 +12,7 @@ import { CraftingPanel } from './components/panels/CraftingPanel';
 import { DiscoveryPanel } from './components/panels/DiscoveryPanel';
 import { SpawnPanel } from './components/panels/SpawnPanel';
 import { DontSayIt } from './features/dont-say-it';
+import { HalliGalli } from './features/halli-galli';
 import { MapPanel } from './components/panels/MapPanel';
 import { ActionCardDisplay } from './components/ui/ActionCardDisplay';
 import { Button } from '@glowing-potato/ui';
@@ -739,6 +740,20 @@ export default function App() {
   if (activeGame === 'dont-say-it') {
     return (
       <DontSayIt
+        onBack={() => setActiveGame(null)}
+        nickname={nickname}
+        isLoggedIn={!!user}
+        currentUserId={user?.uid}
+        onSignIn={handleSignIn}
+        onSignOut={signOut}
+        onUpdateNickname={updateNickname}
+      />
+    );
+  }
+
+  if (activeGame === 'halli-galli') {
+    return (
+      <HalliGalli
         onBack={() => setActiveGame(null)}
         nickname={nickname}
         isLoggedIn={!!user}

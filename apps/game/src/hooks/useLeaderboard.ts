@@ -17,6 +17,7 @@ const LEADERBOARD_BUCKET = 'records';
 
 function resolveLeaderboardCollection(gameId?: string) {
   if (gameId === 'dont-say-it') return 'dont_say_it';
+  if (gameId === 'halli-galli') return 'halli_galli';
   if (gameId === 'glowing_potato') return 'glowing_potato';
   return 'glowing_potato';
 }

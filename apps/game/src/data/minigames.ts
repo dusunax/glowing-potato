@@ -12,6 +12,14 @@ export const MINI_GAMES: MiniGame[] = [
     color: '#be185d',
   },
   {
+    id: 'halli-galli',
+    name: '할리갈리',
+    emoji: '🔔',
+    description: '과일 카드를 뒤집어 합계가 5가 되면 빠르게 벨을 눌러요! 실시간 멀티플레이어 과일 반응 게임.',
+    status: 'available',
+    color: '#ca8a04',
+  },
+  {
     id: 'collection',
     name: 'Glowing Potato',
     emoji: '🌿',
