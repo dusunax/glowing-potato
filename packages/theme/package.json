@@ -6,7 +6,7 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./tailwind": "./src/tailwind.ts",
+    "./tailwind": "./tailwind.js",
     "./index.css": "./index.css"
   },
   "devDependencies": {

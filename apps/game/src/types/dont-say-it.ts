@@ -32,7 +32,12 @@ export interface DsiPlayer {
   wordSlots: DsiWordSlot[];
   isOut: boolean;
   isBot: boolean;
-  isInRoom?: boolean;
+  /**
+   * Whether the player has pressed Ready in the waiting phase.
+   * Bot players are automatically set to `true` on join; human players
+   * must explicitly toggle this with the Ready button.
+   */
+  isReady: boolean;
 }
 
 /** A single line in the in-game chat. */

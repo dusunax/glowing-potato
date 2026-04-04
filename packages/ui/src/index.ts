@@ -9,14 +9,5 @@ export type { CardProps, CardHeaderProps, CardBodyProps, CardTitleProps, CardDes
 export { Badge } from './components/Badge.tsx';
 export type { BadgeProps } from './components/Badge.tsx';
 
-export {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselPrevious,
-  CarouselNext,
-} from './components/Carousel.tsx';
-export type { CarouselApi } from './components/Carousel.tsx';
-
 export { palette } from '@glowing-potato/theme';
 export type { PaletteKey } from '@glowing-potato/theme';

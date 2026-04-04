@@ -1,11 +1,11 @@
-import { gpColors, gpFontFamily } from '../../packages/theme/src/tailwind';
-import type { Config } from 'tailwindcss';
+import { gpColors, gpFontFamily } from '@glowing-potato/theme/tailwind';
 
-const config: Config = {
+/** @type {import('tailwindcss').Config} */
+export default {
   content: [
-    './index.html',
-    './src/**/*.{js,ts,jsx,tsx}',
-    '../../packages/ui/src/**/*.{js,ts,jsx,tsx}',
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+    "../../packages/ui/src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -18,6 +18,5 @@ const config: Config = {
     },
   },
   plugins: [],
-};
+}
 
-export default config;

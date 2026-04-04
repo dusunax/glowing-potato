@@ -32,7 +32,6 @@ export interface DsiPlayer {
   wordSlots: DsiWordSlot[];
   isOut: boolean;
   isBot: boolean;
-  isInRoom?: boolean;
 }
 
 /** A single line in the in-game chat. */

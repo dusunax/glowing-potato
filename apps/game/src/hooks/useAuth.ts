@@ -47,9 +47,6 @@ export function useAuth() {
         } else {
           setNickname('');
         }
-      } catch (error) {
-        console.error('Failed to sync user profile', error);
-        setNickname(firebaseUser ? resolveNickname(undefined, firebaseUser) : '');
       } finally {
         setLoading(false);
       }
@@ -79,15 +76,7 @@ export function useAuth() {
 
       const db = getFirestoreDb();
       if (db) {
-        try {
-          await setDoc(
-            doc(db, 'users', user.uid),
-            { playerId: user.uid, lastNickname: trimmed, lastSeenAt: serverTimestamp() },
-            { merge: true },
-          );
-        } catch (error) {
-          console.error('Failed to update nickname', error);
-        }
+        await setDoc(doc(db, 'users', user.uid), { playerId: user.uid, lastNickname: trimmed, lastSeenAt: serverTimestamp() }, { merge: true });
       }
 
       setNickname(trimmed);

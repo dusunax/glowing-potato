@@ -2,16 +2,13 @@
 // Handles: waiting, voting (word selection + countdown), playing (chat + STT),
 // and finished (winner announcement) phases.
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { DsiGameState, DsiPlayer, DsiChatMessage } from '../types';
 import { Button } from '@glowing-potato/ui';
-import { useLeaderboard } from '../../../hooks/useLeaderboard';
-import { LeaderboardPopup } from '../../leaderboard/LeaderboardPopup';
 
 interface GameRoomProps {
   game: DsiGameState;
   onLeave: () => void;
-  onRestart: () => void;
   onSendMessage: (text: string) => void;
   onStartGame: () => void;
   onCastVote: (targetPlayerId: string, slotIndex: number, wordIndex: number, previousWordIndex?: number) => void;
@@ -26,7 +23,6 @@ interface GameRoomProps {
 export function GameRoom({
   game,
   onLeave,
-  onRestart,
   onSendMessage,
   onStartGame,
   onCastVote,
@@ -40,55 +36,6 @@ export function GameRoom({
   const privateRoomCode = game.roomVisibility === 'private' ? game.roomId : null;
   const [copied, setCopied] = useState(false);
   const [showReplayModal, setShowReplayModal] = useState(false);
-  const [showLeaderboardPopup, setShowLeaderboardPopup] = useState(false);
-  const {
-    records: leaderboardRecords,
-    loading: leaderboardLoading,
-    refresh: refreshLeaderboard,
-    invalidate: invalidateLeaderboard,
-  } = useLeaderboard(10, 'dont-say-it');
-  const invalidatedRef = useRef(false);
-  const leaderboardRows = useMemo(
-    () =>
-      Array.from({ length: 10 }, (_, index) => {
-        const record = leaderboardRecords[index];
-        if (record) {
-          return {
-            type: 'record' as const,
-            index,
-            record: {
-              id: record.id,
-              displayName: record.displayName,
-              score: record.score,
-              survivalDays: 0,
-              level: 0,
-            },
-          };
-        }
-        return { type: 'empty' as const, index };
-      }),
-    [leaderboardRecords],
-  );
-
-  useEffect(() => {
-    if (!showLeaderboardPopup) return;
-    refreshLeaderboard();
-  }, [showLeaderboardPopup, refreshLeaderboard]);
-
-  useEffect(() => {
-    if (game.phase !== 'finished' || invalidatedRef.current) return;
-    invalidatedRef.current = true;
-    void (async () => {
-      await invalidateLeaderboard();
-      await refreshLeaderboard();
-    })();
-  }, [game.phase, invalidateLeaderboard, refreshLeaderboard]);
-
-  useEffect(() => {
-    if (game.phase !== 'finished') {
-      invalidatedRef.current = false;
-    }
-  }, [game.phase]);
 
   function handleCopyRoomCode() {
     if (!privateRoomCode) return;
@@ -152,26 +99,11 @@ export function GameRoom({
           />
         )}
         {game.phase === 'finished' && (
-          <FinishedView
-            game={game}
-            onRestart={onRestart}
-            onShowReplay={() => setShowReplayModal(true)}
-            onShowLeaderboard={() => setShowLeaderboardPopup(true)}
-          />
+          <FinishedView game={game} onLeave={onLeave} onShowReplay={() => setShowReplayModal(true)} />
         )}
       </>
       {game.phase === 'finished' && showReplayModal && (
         <ChatReplayPage game={game} onClose={() => setShowReplayModal(false)} />
-      )}
-      {game.phase === 'finished' && showLeaderboardPopup && (
-        <LeaderboardPopup
-          isOpen={showLeaderboardPopup}
-          onClose={() => setShowLeaderboardPopup(false)}
-          title="🏆 Leaderboard"
-          loading={leaderboardLoading}
-          rows={leaderboardRows}
-          scoreSuffix="wins"
-        />
       )}
     </div>
   );
@@ -183,10 +115,8 @@ export function GameRoom({
 
 function WaitingView({ game, onStartGame }: { game: DsiGameState; onStartGame: () => void }) {
   const isHost = game.isHost;
-  const inRoomPlayerCount = game.players.filter((p) => p.isInRoom !== false).length;
-  const canStart = isHost && inRoomPlayerCount >= 2;
+  const canStart = isHost && game.players.length >= 2;
   const maxPlayers = game.maxPlayers || 4;
-  const shouldDim = (isInRoom: boolean | undefined) => isInRoom === false;
 
   return (
     <div className="h-full min-h-0 flex-1 flex flex-col items-center justify-center gap-6 p-6 overflow-y-auto gp-scrollbar">
@@ -194,7 +124,7 @@ function WaitingView({ game, onStartGame }: { game: DsiGameState; onStartGame: (
       <div className="text-center">
         <p className="text-gp-mint font-semibold text-lg">Waiting for players…</p>
         <p className="text-gp-mint/50 text-sm mt-1">
-          {inRoomPlayerCount} / {maxPlayers} — need at least 2 to start
+          {game.players.length} / {maxPlayers} — need at least 2 to start
         </p>
       </div>
       {isHost && (
@@ -211,23 +141,12 @@ function WaitingView({ game, onStartGame }: { game: DsiGameState; onStartGame: (
       {/* Player list */}
       <div className="w-full max-w-xs space-y-2">
         {game.players.map((p) => (
-          <div
-            key={p.id}
-            className={`flex items-center gap-3 p-3 rounded-xl border ${
-              shouldDim(p.isInRoom)
-                ? 'bg-gp-surface/25 border-gp-accent/10 opacity-50'
-                : 'bg-gp-surface/50 border-gp-accent/20'
-            }`}
-          >
+          <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-gp-surface/50 border border-gp-accent/20">
             <span className="text-lg">{p.isBot ? '🤖' : '👤'}</span>
-            <span
-              className={`text-sm font-medium flex-1 ${
-                shouldDim(p.isInRoom) ? 'text-gp-mint/40' : 'text-gp-mint'
-              }`}
-            >
+            <span className="text-gp-mint text-sm font-medium flex-1">
               {p.id === game.localPlayerId ? `${p.name} (you)` : p.name}
             </span>
-            {p.id === game.hostId && (
+            {game.isHost && p.id === game.localPlayerId && (
               <span className="text-sm" title="Room creator">
                 👑
               </span>
@@ -658,14 +577,12 @@ function PlayerWordCard({ player }: { player: DsiPlayer }) {
 
 function FinishedView({
   game,
-  onRestart,
+  onLeave,
   onShowReplay,
-  onShowLeaderboard,
 }: {
   game: DsiGameState;
-  onRestart: () => void;
+  onLeave: () => void;
   onShowReplay: () => void;
-  onShowLeaderboard: () => void;
 }) {
   const localPlayer = game.players.find((p) => p.id === game.localPlayerId);
   const localName = localPlayer?.name ?? 'You';
@@ -743,17 +660,11 @@ function FinishedView({
           title="Chat Replay"
           aria-label="Chat Replay"
         >
+          <span aria-hidden="true">📜 </span>
           <span className="ml-1.5">Chat Replay</span>
         </Button>
-        <Button variant="secondary" size="lg" onClick={onShowLeaderboard}>
-          View Leaderboard
-        </Button>
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={onRestart}
-        >
-          Play Again in this Room
+        <Button variant="primary" size="lg" onClick={onLeave}>
+          Back to Lobby
         </Button>
       </div>
     </div>
