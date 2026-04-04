@@ -1,5 +1,10 @@
-// Design tokens re-exported from @glowing-potato/theme for backward compatibility.
-// Import directly from '@glowing-potato/theme' for new code.
+// Backward-compatible token exports for @glowing-potato/theme.
 
-export { palette } from '@glowing-potato/theme';
-export type { PaletteKey } from '@glowing-potato/theme';
+export const palette = {
+  bg: 'rgb(var(--gp-bg))',
+  surface: 'rgb(var(--gp-surface))',
+  accent: 'rgb(var(--gp-accent))',
+  mint: 'rgb(var(--gp-mint))',
+};
+
+export type PaletteKey = keyof typeof palette;
