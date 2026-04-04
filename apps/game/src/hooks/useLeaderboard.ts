@@ -1,29 +1,58 @@
-import { useState, useEffect, useCallback } from 'react';
-import { collection, query, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
+import { useCallback } from 'react';
+import {
+  type QueryDocumentSnapshot,
+  collection,
+  query,
+  limit,
+  getDocs,
+  doc,
+  getDoc,
+} from 'firebase/firestore';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getFirestoreDb } from '../features/dont-say-it/lib/firebase';
 import type { GameRecord } from '../types/score';
 
+const GAME_HISTORY_COLLECTION = 'game_histories';
+const LEADERBOARD_BUCKET = 'records';
+
+function resolveLeaderboardCollection(gameId?: string) {
+  if (gameId === 'dont-say-it') return 'dont_say_it';
+  if (gameId === 'glowing_potato') return 'glowing_potato';
+  return 'glowing_potato';
+}
+
 type LeaderboardRecord = GameRecord & { displayName: string };
 
-export function useLeaderboard(topN = 10) {
-  const [records, setRecords] = useState<LeaderboardRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+function toLeaderboardRecord(docSnap: QueryDocumentSnapshot): LeaderboardRecord & { id: string; createdAt: number } {
+  const raw = docSnap.data();
+  return {
+    ...raw,
+    id: docSnap.id,
+    createdAt: typeof raw.createdAt?.toMillis === 'function' ? raw.createdAt.toMillis() : Date.now(),
+  } as LeaderboardRecord & { id: string; createdAt: number };
+}
 
-  const refresh = useCallback(async () => {
+export function useLeaderboard(topN = 10, gameId?: string) {
+  const queryClient = useQueryClient();
+  const normalizedGameId = gameId ?? '';
+  const normalizedCollection = resolveLeaderboardCollection(normalizedGameId);
+  const queryKey = ['leaderboard', topN, normalizedGameId] as const;
+
+  const loadRecords = useCallback(async (): Promise<LeaderboardRecord[]> => {
     const db = getFirestoreDb();
-    if (!db) return;
-    setLoading(true);
+    if (!db) return [];
     try {
-      const q = query(collection(db, 'gameRecords'), orderBy('score', 'desc'), limit(topN));
-      const snap = await getDocs(q);
-      const baseRecords = snap.docs.map((d) => {
-        const raw = d.data();
-        return {
-          id: d.id,
-          ...raw,
-          createdAt: raw.createdAt?.toMillis?.() ?? Date.now(),
-        } as GameRecord;
+      const recordsCollection = collection(db, GAME_HISTORY_COLLECTION, normalizedCollection, LEADERBOARD_BUCKET);
+      const fetchQuery = query(recordsCollection, limit(Math.max(topN * 20, 200)));
+      const snaps = await getDocs(fetchQuery);
+      const unique = new Map<string, ReturnType<typeof toLeaderboardRecord>>();
+
+      snaps.docs.forEach((docSnap) => {
+        unique.set(docSnap.id, toLeaderboardRecord(docSnap as QueryDocumentSnapshot));
       });
+
+      const baseRecords = [...unique.values()].sort((a, b) => Number(b.score) - Number(a.score)).slice(0, topN);
+
       const userIds = [
         ...new Set(
           baseRecords
@@ -45,24 +74,34 @@ export function useLeaderboard(topN = 10) {
         }),
       );
 
-      const data: LeaderboardRecord[] = baseRecords.map((record) => ({
+      const data = baseRecords.map((record) => ({
         ...record,
         displayName:
           typeof record.userId === 'string' && record.userId.startsWith('guest-')
-          ? 'Guest'
-          : userNicknameById.get(record.userId) || record.nickname || String(record.userId),
+            ? 'Guest'
+            : userNicknameById.get(record.userId) || record.nickname || String(record.userId),
       }));
-      setRecords(data);
-    } catch {
-      // Firestore not available or index not ready
-    } finally {
-      setLoading(false);
+      return data;
+    } catch (error) {
+      console.error('Failed to load leaderboard records', error);
+      return [];
     }
-  }, [topN]);
+  }, [normalizedGameId, topN]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const {
+    data: records = [],
+    isLoading: loading,
+    refetch: refresh,
+  } = useQuery({
+    queryKey,
+    queryFn: loadRecords,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
 
-  return { records, loading, refresh };
+  const invalidate = useCallback(() => {
+    return queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
+
+  return { records, loading, refresh, invalidate };
 }
