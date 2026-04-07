@@ -12,7 +12,7 @@ interface InventoryPanelProps {
   onSelectBeltSlot: (slotIndex: number) => void;
   onAssignToBelt: (slotIndex: number, itemId: string) => void;
   onClearBeltSlot: (slotIndex: number) => void;
-  canUseInBelt: (itemId: string) => boolean;
+  canUseInBelt: (itemId: string, slotIndex: number) => boolean;
 }
 
 export function InventoryPanel({
@@ -33,7 +33,7 @@ export function InventoryPanel({
   const MIN_SLOTS = 8;
   const slots = Math.max(MIN_SLOTS, inventory.length);
   const selectedSlotItem = beltSlots[selectedBeltSlot];
-  const selectedSlotLabel = `Slot ${selectedBeltSlot + 1}${selectedSlotItem ? ` (${getItemById(selectedSlotItem)?.name ?? 'Empty'})` : ' (Empty)'}`;
+  const selectedSlotLabel = `${selectedBeltSlot === 0 ? 'Weapon Slot' : `Slot ${selectedBeltSlot}`} ${selectedSlotItem ? `(${getItemById(selectedSlotItem)?.name ?? 'Empty'})` : '(Empty)'}`;
 
   return (
     <div className="flex flex-col h-full">
@@ -44,6 +44,7 @@ export function InventoryPanel({
           {beltSlots.map((itemId, index) => {
             const item = itemId ? getItemById(itemId) : null;
             const isSelected = index === selectedBeltSlot;
+            const slotLabel = index === 0 ? 'W' : `${index}`;
             if (!item) {
               return (
                 <button
@@ -55,6 +56,7 @@ export function InventoryPanel({
                   <div className={`h-full ${isSelected ? 'ring-1 ring-inset ring-gp-mint/50 bg-gp-mint/5' : ''}`}>
                     <div className={`${EMPTY_SLOT_CLASS} h-full`} style={EMPTY_SLOT_STYLE} />
                   </div>
+                  <span className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">{slotLabel}</span>
                 </button>
               );
             }
@@ -63,16 +65,16 @@ export function InventoryPanel({
                 key={`belt-slot-config-${index}`}
                 type="button"
                 onClick={() => onSelectBeltSlot(index)}
-                className={`relative min-h-12 rounded-lg border transition-colors ${isSelected ? 'border-gp-mint bg-gp-mint/20 ring-2 ring-gp-mint/70' : 'border-gp-accent/30 bg-gp-bg/40 hover:border-gp-accent/70'} ${itemId ? 'text-gp-mint' : 'text-gp-mint/60'}`}
+                className={`relative min-h-12 rounded-lg border transition-colors ${isSelected ? 'border-gp-mint bg-gp-mint/20 ring-2 ring-gp-mint/70' : 'border-gp-accent/30 bg-gp-bg/40 hover:border-gp-accent/70 flex flex-col'} ${itemId ? 'text-gp-mint' : 'text-gp-mint/60'}`}
               >
-                <div className="text-xs mb-1 text-left px-2 pt-1">#{index + 1}</div>
-                <div className="text-[22px] leading-none text-center">{item?.emoji ?? '▢'}</div>
+                <div className="text-xs mb-1 absolute text-left px-2 pt-1 top-0">{index === 0 ? 'W' : `${index}`}</div>
+                <div className="text-3xl pt-1 leading-none text-center flex-1 min-h-0 flex justify-center items-center">{item?.emoji ?? '▢'}</div>
               </button>
             );
           })}
         </div>
-        <div className="text-xs text-gp-mint/60">Selected: {selectedSlotLabel}</div>
-      </div>
+                <div className="text-xs text-gp-mint/60">Selected: {selectedSlotLabel}</div>
+              </div>
 
       <div className="flex-1 min-h-0 flex flex-col gap-2">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto">
@@ -90,7 +92,7 @@ export function InventoryPanel({
               );
             }
 
-            const isBeltItem = canUseInBelt(slot.itemId);
+            const isBeltItem = canUseInBelt(slot.itemId, selectedBeltSlot);
             return (
               <div key={slot.itemId} className="rounded-lg border border-gp-accent/30 bg-gp-bg/30 p-2 space-y-2">
                 <ItemCard slot={slot} />
@@ -115,7 +117,9 @@ export function InventoryPanel({
                       Clear Selected
                     </button>
                     )}
-                  {!isBeltItem && <span className="text-xs text-gp-mint/50">Not usable on belt</span>}
+                  {!isBeltItem && (
+                    <span className="text-xs text-gp-mint/50">✕</span>
+                  )}
                 </div>
               </div>
             );

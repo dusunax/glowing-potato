@@ -1,8 +1,8 @@
 // Displays the world map with fog-of-war, maze passages, resource counters, and animals.
 
-import { MAP_GRID, MAP_COLS, MAP_ROWS, BIOME_INFO, getMazeNeighbors } from '../../data/map';
+import { MAP_COLS, MAP_ROWS, BIOME_INFO, getMazeNeighbors } from '../../data/map';
 import { tileKey } from '../../hooks/useMap';
-import type { PlayerPosition, BiomeInfo } from '../../types/map';
+import type { PlayerPosition, BiomeInfo, BiomeType } from '../../types/map';
 import type { ActionCard } from '../../types/actionCard';
 import type { WildAnimal } from '../../types/animal';
 import { CardTitle } from '@glowing-potato/ui';
@@ -12,6 +12,7 @@ interface MapPanelProps {
   selectedCard: ActionCard | null;
   showPlayerMoveHint?: boolean;
   onTileClick: (x: number, y: number) => void;
+  mapGrid: BiomeType[][];
   currentBiomeInfo: BiomeInfo;
   canMoveTo: (x: number, y: number, range?: number) => boolean;
   visitedTiles: Set<string>;
@@ -27,6 +28,7 @@ export function MapPanel({
   selectedCard,
   showPlayerMoveHint = false,
   onTileClick,
+  mapGrid,
   currentBiomeInfo,
   visitedTiles,
   knownTiles,
@@ -55,9 +57,9 @@ export function MapPanel({
       {/* World grid */}
       <div
         className="grid gap-1 mb-3"
-        style={{ gridTemplateColumns: `repeat(${MAP_COLS}, 1fr)` }}
+        style={{ gridTemplateColumns: `repeat(${mapGrid[0]?.length ?? MAP_COLS}, 1fr)` }}
       >
-        {MAP_GRID.map((row, y) =>
+        {mapGrid.map((row, y) =>
           row.map((biome, x) => {
             const key = tileKey(x, y);
             const isPlayer = position.x === x && position.y === y;

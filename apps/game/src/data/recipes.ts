@@ -26,6 +26,44 @@ export const RECIPES: Recipe[] = [
     result: { itemId: 'hunter_stew', quantity: 1 },
   },
   {
+    id: 'grilled_meat',
+    name: 'Grilled Meat',
+    description: 'Meat cooked over a branch-fire.',
+    ingredients: [
+      { itemId: 'raw_meat', quantity: 1 },
+      { itemId: 'branch', quantity: 1 },
+    ],
+    result: { itemId: 'grilled_meat', quantity: 1 },
+  },
+  {
+    id: 'wooden_sword',
+    name: 'Wooden Sword',
+    description: 'Carve a sturdy branch into a lightweight weapon.',
+    ingredients: [{ itemId: 'branch', quantity: 2 }],
+    result: { itemId: 'wooden_sword', quantity: 1 },
+  },
+  {
+    id: 'stone_blade',
+    name: 'Stone Blade',
+    description: 'Bind a sharpened stone onto a branch and shape it into a blade.',
+    ingredients: [
+      { itemId: 'branch', quantity: 1 },
+      { itemId: 'stone', quantity: 2 },
+    ],
+    result: { itemId: 'stone_blade', quantity: 1 },
+  },
+  {
+    id: 'bone_spear',
+    name: 'Bone Spear',
+    description: 'Bind hide and stone onto a long branch for harder-hitting attacks.',
+    ingredients: [
+      { itemId: 'branch', quantity: 1 },
+      { itemId: 'stone_blade', quantity: 1 },
+      { itemId: 'animal_hide', quantity: 1 },
+    ],
+    result: { itemId: 'bone_spear', quantity: 1 },
+  },
+  {
     id: 'mushroom_soup',
     name: 'Mushroom Soup',
     description: 'A warm autumnal soup brewed from autumn finds.',

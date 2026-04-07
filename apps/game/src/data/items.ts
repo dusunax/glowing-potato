@@ -10,17 +10,74 @@ export const ITEMS: Item[] = [
     name: 'Raw Meat',
     emoji: '🥩',
     description: 'Fresh meat dropped by a defeated animal.',
-    rarity: 'common',
+    rarity: 1,
     category: 'creature',
     tags: ['loot'],
     spawnConditions: { seasons: [] }, // loot-only, never foraged
+  },
+  {
+    id: 'branch',
+    name: 'Branch',
+    emoji: '🪵',
+    description: 'A sturdy branch useful for basic crafting.',
+    rarity: 1,
+    category: 'crafted',
+    tags: ['craft-base', 'fuel', 'base-resource'],
+    spawnConditions: { biomes: ['mountain', 'forest'] },
+  },
+  {
+    id: 'wooden_sword',
+    name: 'Wooden Sword',
+    emoji: '🗡️',
+    description: 'A sharpened branch tied with twine for quick, basic combat.',
+    rarity: 2,
+    category: 'weapon',
+    tags: ['weapon', 'melee'],
+    attackPower: 2,
+    spawnConditions: { seasons: [] }, // crafted-only
+  },
+  {
+    id: 'stone_blade',
+    name: 'Stone Blade',
+    emoji: '🗡️',
+    description: 'A blade carved from hard stone and tied to a branch handle.',
+    rarity: 3,
+    category: 'weapon',
+    tags: ['weapon', 'melee'],
+    attackPower: 4,
+    spawnConditions: {
+      biomes: ['everywhere'],
+    },
+  },
+  {
+    id: 'bone_spear',
+    name: 'Bone Spear',
+    emoji: '🔱',
+    description: 'A hunting spear with a sharpened bone point.',
+    rarity: 4,
+    category: 'weapon',
+    tags: ['weapon', 'melee'],
+    attackPower: 7,
+    spawnConditions: {
+      biomes: ['everywhere'],
+    },
+  },
+  {
+    id: 'grilled_meat',
+    name: 'Grilled Meat',
+    emoji: '🍖',
+    description: 'Fresh game meat seared over an open flame.',
+    rarity: 2,
+    category: 'creature',
+    tags: ['food', 'cooking'],
+    spawnConditions: { seasons: [] }, // crafted-only
   },
   {
     id: 'animal_hide',
     name: 'Animal Hide',
     emoji: '🪶',
     description: 'Tough hide stripped from a defeated animal.',
-    rarity: 'common',
+    rarity: 1,
     category: 'creature',
     tags: ['material', 'loot'],
     spawnConditions: { seasons: [] }, // loot-only, never foraged
@@ -30,7 +87,7 @@ export const ITEMS: Item[] = [
     name: 'Hunter Stew',
     emoji: '🍲',
     description: 'A hearty stew made from fresh game and wild mushrooms.',
-    rarity: 'uncommon',
+    rarity: 2,
     category: 'creature',
     tags: ['food', 'cooking'],
     spawnConditions: { seasons: [] },
@@ -40,7 +97,7 @@ export const ITEMS: Item[] = [
     name: 'Healing Potion',
     emoji: '🧪',
     description: 'A sweet berry tonic that restores a lot of health.',
-    rarity: 'rare',
+    rarity: 3,
     category: 'crafted',
     tags: ['potion'],
     spawnConditions: { seasons: [] },
@@ -51,7 +108,7 @@ export const ITEMS: Item[] = [
     name: 'Sunflower',
     emoji: '🌻',
     description: 'Bright petals that absorb summer sunlight.',
-    rarity: 'common',
+    rarity: 1,
     category: 'flora',
     tags: ['flower', 'dye'],
     spawnConditions: {
@@ -65,7 +122,7 @@ export const ITEMS: Item[] = [
     name: 'Morning Dew Flower',
     emoji: '🌸',
     description: 'A delicate flower that blooms only in dawn mist.',
-    rarity: 'uncommon',
+    rarity: 2,
     category: 'flora',
     tags: ['flower', 'potion-ingredient'],
     spawnConditions: {
@@ -79,7 +136,7 @@ export const ITEMS: Item[] = [
     name: 'Mushroom',
     emoji: '🍄',
     description: 'Pops up after heavy rains in foggy conditions.',
-    rarity: 'common',
+    rarity: 1,
     category: 'flora',
     tags: ['mushroom', 'food'],
     spawnConditions: {
@@ -92,7 +149,7 @@ export const ITEMS: Item[] = [
     name: 'Rain Lily',
     emoji: '🌺',
     description: 'Blooms brilliantly right after rainfall.',
-    rarity: 'uncommon',
+    rarity: 2,
     category: 'flora',
     tags: ['flower', 'potion-ingredient'],
     spawnConditions: {
@@ -105,7 +162,7 @@ export const ITEMS: Item[] = [
     name: 'Autumn Leaf',
     emoji: '🍂',
     description: 'A golden-red leaf from a turning tree.',
-    rarity: 'common',
+    rarity: 1,
     category: 'flora',
     tags: ['leaf', 'dye'],
     spawnConditions: {
@@ -117,7 +174,7 @@ export const ITEMS: Item[] = [
     name: 'Frostbloom',
     emoji: '❄️',
     description: 'Rare ice-crystal flower found in deep winter.',
-    rarity: 'rare',
+    rarity: 3,
     category: 'flora',
     tags: ['flower', 'crystal', 'potion-ingredient'],
     spawnConditions: {
@@ -131,7 +188,7 @@ export const ITEMS: Item[] = [
     name: 'Sunberry',
     emoji: '🍓',
     description: 'Sweet red berries ripened by summer sun.',
-    rarity: 'common',
+    rarity: 1,
     category: 'flora',
     tags: ['berry', 'food'],
     spawnConditions: {
@@ -145,7 +202,7 @@ export const ITEMS: Item[] = [
     name: 'Winter Berry',
     emoji: '🫐',
     description: 'Icy blue berries that survive frost.',
-    rarity: 'uncommon',
+    rarity: 2,
     category: 'flora',
     tags: ['berry', 'food'],
     spawnConditions: {
@@ -158,7 +215,7 @@ export const ITEMS: Item[] = [
     name: 'Four-Leaf Clover',
     emoji: '🍀',
     description: 'Hard to find but brings good luck.',
-    rarity: 'rare',
+    rarity: 3,
     category: 'flora',
     tags: ['lucky', 'special'],
     spawnConditions: {
@@ -172,7 +229,7 @@ export const ITEMS: Item[] = [
     name: 'Moongrass',
     emoji: '🌿',
     description: 'Luminescent grass that glows under moonlight.',
-    rarity: 'uncommon',
+    rarity: 2,
     category: 'flora',
     tags: ['grass', 'glow'],
     spawnConditions: {
@@ -184,7 +241,7 @@ export const ITEMS: Item[] = [
     name: 'Pinecone',
     emoji: '🌲',
     description: 'Falls from pines in the cool season.',
-    rarity: 'common',
+    rarity: 1,
     category: 'flora',
     tags: ['seed', 'craft-base'],
     spawnConditions: {
@@ -194,20 +251,34 @@ export const ITEMS: Item[] = [
   // ── Minerals ───────────────────────────────────────────────────────────────
   {
     id: 'river_stone',
-    name: 'River Stone',
+    name: 'River Shingle',
     emoji: '🪨',
-    description: 'A smooth stone from the riverbank.',
-    rarity: 'common',
+    description: 'A smooth piece of stone shaped by flowing water.',
+    rarity: 1,
     category: 'mineral',
-    tags: ['stone', 'craft-base'],
-    spawnConditions: {},
+    tags: ['stone', 'craft-base', 'base-resource'],
+    spawnConditions: {
+      biomes: ['beach', 'lake'],
+    },
+  },
+  {
+    id: 'stone',
+    name: 'Stone',
+    emoji: '🪨',
+    description: 'A rough stone fragment found in rocky areas.',
+    rarity: 1,
+    category: 'mineral',
+    tags: ['stone', 'craft-base', 'base-resource'],
+    spawnConditions: {
+      biomes: ['cave'],
+    },
   },
   {
     id: 'raindrop',
     name: 'Raindrop Vial',
     emoji: '💧',
     description: 'Pure rain collected in a tiny vial.',
-    rarity: 'common',
+    rarity: 1,
     category: 'mineral',
     tags: ['liquid', 'craft-base'],
     spawnConditions: {
@@ -219,7 +290,7 @@ export const ITEMS: Item[] = [
     name: 'Moonstone',
     emoji: '💎',
     description: 'A shimmering gem found under moonlight.',
-    rarity: 'rare',
+    rarity: 3,
     category: 'mineral',
     tags: ['gem', 'magic'],
     spawnConditions: {
@@ -231,7 +302,7 @@ export const ITEMS: Item[] = [
     name: 'Sunstone',
     emoji: '🌟',
     description: 'A warm golden crystal found on sunny summer afternoons.',
-    rarity: 'rare',
+    rarity: 3,
     category: 'mineral',
     tags: ['gem', 'magic'],
     spawnConditions: {
@@ -245,7 +316,7 @@ export const ITEMS: Item[] = [
     name: 'Fog Pearl',
     emoji: '🫧',
     description: 'A mysterious orb that appears in heavy fog.',
-    rarity: 'uncommon',
+    rarity: 2,
     category: 'mineral',
     tags: ['crystal', 'magic'],
     spawnConditions: {
@@ -258,7 +329,7 @@ export const ITEMS: Item[] = [
     name: 'Storm Shard',
     emoji: '⚡',
     description: 'A charged crystal fragment from a thunderstorm.',
-    rarity: 'rare',
+    rarity: 3,
     category: 'mineral',
     tags: ['crystal', 'magic', 'energy'],
     spawnConditions: {
@@ -272,7 +343,7 @@ export const ITEMS: Item[] = [
     name: 'Firefly',
     emoji: '✨',
     description: 'A tiny glowing insect of warm summer nights.',
-    rarity: 'uncommon',
+    rarity: 2,
     category: 'creature',
     tags: ['insect', 'glow'],
     spawnConditions: {
@@ -285,7 +356,7 @@ export const ITEMS: Item[] = [
     name: 'Spring Butterfly',
     emoji: '🦋',
     description: 'Flutters through spring meadows on sunny days.',
-    rarity: 'uncommon',
+    rarity: 2,
     category: 'creature',
     tags: ['insect', 'beauty'],
     spawnConditions: {
@@ -299,7 +370,7 @@ export const ITEMS: Item[] = [
     name: 'Night Moth',
     emoji: '🌙',
     description: 'A dusty moth drawn to moonlight.',
-    rarity: 'common',
+    rarity: 1,
     category: 'creature',
     tags: ['insect', 'night'],
     spawnConditions: {
@@ -311,7 +382,7 @@ export const ITEMS: Item[] = [
     name: 'Frost Sprite',
     emoji: '🧊',
     description: 'A tiny ice elemental seen only in deep winter midnight.',
-    rarity: 'legendary',
+    rarity: 4,
     category: 'creature',
     tags: ['elemental', 'magic'],
     spawnConditions: {
@@ -326,7 +397,7 @@ export const ITEMS: Item[] = [
     name: 'Ancient Seed',
     emoji: '🌱',
     description: 'A mysterious seed of unknown origin.',
-    rarity: 'rare',
+    rarity: 3,
     category: 'special',
     tags: ['seed', 'mystery'],
     spawnConditions: {
@@ -338,9 +409,9 @@ export const ITEMS: Item[] = [
     name: 'Star Fragment',
     emoji: '💫',
     description: 'A piece of fallen star. Extraordinarily rare.',
-    rarity: 'legendary',
+    rarity: 4,
     category: 'special',
-    tags: ['celestial', 'magic', 'rare'],
+    tags: ['celestial', 'magic', 'tier-3'],
     spawnConditions: {
       timePeriods: ['Night'],
       weathers: ['Cloudy', 'Snowy'],

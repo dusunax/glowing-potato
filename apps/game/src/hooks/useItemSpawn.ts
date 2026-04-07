@@ -5,11 +5,18 @@ import { useCallback } from 'react';
 import type { WorldConditions } from '../types/conditions';
 import type { BiomeInfo } from '../types/map';
 import { ITEMS } from '../data/items';
-import { getSpawnableItems, pickRandomItemWithBiome, pickRandomItemLucky } from '../utils/spawning';
+import {
+  getSpawnableItemsByLayer,
+  getSpawnableItemsUpToLayer,
+  pickRandomItemWithBiome,
+  pickRandomItemLucky,
+} from '../utils/spawning';
 
 interface UseItemSpawnOptions {
   conditions: WorldConditions;
   biomeInfo: BiomeInfo;
+  scoutRevealLevel: number;
+  selectedSpawnLayer: number;
   addItem: (itemId: string, qty?: number) => void;
   markDiscovered: (itemId: string) => void;
   /** Returns remaining resources on the current tile; pass -1 to indicate depleted already */
@@ -19,6 +26,8 @@ interface UseItemSpawnOptions {
 export function useItemSpawn({
   conditions,
   biomeInfo,
+  scoutRevealLevel,
+  selectedSpawnLayer,
   addItem,
   markDiscovered,
   consumeTileResource,
@@ -30,7 +39,9 @@ export function useItemSpawn({
       if (remaining < 0) {
         return '';
       }
-      const spawnable = getSpawnableItems(ITEMS, conditions);
+      const spawnable = selectedSpawnLayer <= scoutRevealLevel
+        ? getSpawnableItemsByLayer(ITEMS, conditions, scoutRevealLevel, selectedSpawnLayer, biomeInfo.type)
+        : getSpawnableItemsUpToLayer(ITEMS, conditions, scoutRevealLevel, biomeInfo.type);
       const item = lucky
         ? pickRandomItemLucky(spawnable, biomeInfo)
         : pickRandomItemWithBiome(spawnable, biomeInfo);
@@ -40,7 +51,7 @@ export function useItemSpawn({
       const depletedNote = remaining === 0 ? ' (tile now exhausted)' : '';
       return `You found a ${item.emoji} ${item.name}!${depletedNote}`;
     },
-    [conditions, biomeInfo, addItem, markDiscovered, consumeTileResource]
+    [biomeInfo, conditions, markDiscovered, scoutRevealLevel, selectedSpawnLayer, consumeTileResource, addItem]
   );
 
   return { collect };

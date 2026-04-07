@@ -1,5 +1,7 @@
 // Type definitions for wild animals that roam the game world.
 
+import type { ItemRarity } from './items';
+
 export type AnimalBehavior = 'hostile' | 'neutral';
 
 export interface AnimalTemplate {
@@ -9,6 +11,9 @@ export interface AnimalTemplate {
   maxHp: number;
   /** Damage dealt to player when attacking */
   attack: number;
+  /** Experience awarded when defeated */
+  experienceReward: number;
+  rarity: ItemRarity;
 }
 
 export interface WildAnimal extends AnimalTemplate {

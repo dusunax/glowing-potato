@@ -1,13 +1,14 @@
 // Hook managing wild animals: state, AI movement, and combat.
 
 import { useState, useCallback, useRef } from 'react';
-import type { WildAnimal } from '../types/animal';
-import type { PlayerPosition } from '../types/map';
+import type { AnimalTemplate, WildAnimal } from '../types/animal';
+import type { PlayerPosition, MapBiomePreset } from '../types/map';
 import { createInitialAnimals, spawnNewWave } from '../data/animals';
 import { getMazeNeighbors, MAP_COLS, MAP_ROWS } from '../data/map';
 import { tileKey } from './useMap';
 
-const PLAYER_ATTACK_DAMAGE = 3;
+const BASE_PLAYER_ATTACK_DAMAGE = 3;
+type PlayerAttackDamageCalculator = () => number;
 
 /** BFS shortest path from `from` to `to` through the maze. Returns next step or null. */
 function nextStepToward(from: PlayerPosition, to: PlayerPosition): PlayerPosition | null {
@@ -52,10 +53,15 @@ function stepAwayFrom(pos: PlayerPosition, player: PlayerPosition): PlayerPositi
   return farthest;
 }
 
-export function useAnimals() {
+export function useAnimals(
+  caveTiles: Array<{ x: number; y: number }> = [],
+  biomePreset: MapBiomePreset = 'meadow',
+  getPlayerAttackDamage: PlayerAttackDamageCalculator = () => BASE_PLAYER_ATTACK_DAMAGE,
+) {
   const animalsRef = useRef<WildAnimal[]>([]);
+  const safeCaveTiles = caveTiles.length > 0 ? caveTiles : [];
   const [animals, setAnimals] = useState<WildAnimal[]>(() => {
-    const initial = createInitialAnimals();
+    const initial = createInitialAnimals(safeCaveTiles, biomePreset);
     animalsRef.current = initial;
     return initial;
   });
@@ -63,13 +69,24 @@ export function useAnimals() {
   /** Move all alive animals one step (called when the player moves). */
   const moveAnimals = useCallback((playerPosition: PlayerPosition) => {
     const current = animalsRef.current;
+    const occupied = new Set<string>(current.filter((a) => a.alive).map((a) => tileKey(a.position.x, a.position.y)));
     const moved = current.map((a) => {
       if (!a.alive) return a;
+
+      occupied.delete(tileKey(a.position.x, a.position.y));
 
       let next: PlayerPosition;
       if (a.behavior === 'hostile') {
         const step = nextStepToward(a.position, playerPosition);
-        next = step ?? a.position;
+        if (step && (step.x !== playerPosition.x || step.y !== playerPosition.y)) {
+          if (!occupied.has(tileKey(step.x, step.y))) {
+            next = step;
+          } else {
+            next = a.position;
+          }
+        } else {
+          next = a.position;
+        }
       } else {
         const px = Math.abs(a.position.x - playerPosition.x);
         const py = Math.abs(a.position.y - playerPosition.y);
@@ -78,20 +95,31 @@ export function useAnimals() {
         } else {
           next = Math.random() < 0.4 ? randomStep(a.position) : a.position;
         }
+        if (next.x === playerPosition.x && next.y === playerPosition.y) {
+          next = a.position;
+        }
+        if (occupied.has(tileKey(next.x, next.y))) {
+          next = a.position;
+        }
       }
 
       if (next.x === playerPosition.x && next.y === playerPosition.y) {
         next = a.position;
       }
 
+      occupied.add(tileKey(next.x, next.y));
+
       return { ...a, position: next };
     });
 
-    const nextAnimals = moved.every((a) => !a.alive) ? spawnNewWave() : moved;
+    const occupiedAfterMove = moved.filter((a) => a.alive).map((a) => a.position);
+    const nextAnimals = moved.every((a) => !a.alive)
+      ? spawnNewWave(safeCaveTiles, biomePreset, occupiedAfterMove)
+      : moved;
     animalsRef.current = nextAnimals;
     setAnimals(nextAnimals);
     return nextAnimals;
-  }, []);
+  }, [safeCaveTiles, biomePreset]);
 
 type AttackResult = {
   message: string;
@@ -100,20 +128,43 @@ type AttackResult = {
   animalId: string;
   animalName: string;
   animalEmoji: string;
+  animalRarity: WildAnimal['rarity'];
   experience: number;
 };
 
   /** Spawn a cave wave on schedule (1–2 new animals in cave tiles). */
-  const spawnCaveWave = useCallback((): WildAnimal[] => {
+  const spawnCaveWave = useCallback((forcedTemplate?: AnimalTemplate): WildAnimal[] => {
     const current = animalsRef.current;
-    const spawnFromCave = spawnNewWave();
+    const occupied = current
+      .filter((a) => a.alive)
+      .map((a) => a.position);
+    const spawnFromCave = spawnNewWave(safeCaveTiles, biomePreset, occupied, forcedTemplate);
     const nextAnimals = current.every((a) => !a.alive)
       ? spawnFromCave
       : [...current.filter((a) => a.alive), ...spawnFromCave];
     animalsRef.current = nextAnimals;
     setAnimals(nextAnimals);
     return nextAnimals;
-  }, []);
+  }, [safeCaveTiles, biomePreset]);
+
+  /** Spawn custom cave wave templates as separate one-by-one monsters. */
+  const spawnCaveWaveWithTemplates = useCallback((templates: AnimalTemplate[]) => {
+    const current = animalsRef.current;
+    if (templates.length === 0) return current;
+    const shouldReplaceWithSpawn = current.every((a) => !a.alive);
+    let nextAnimals: WildAnimal[] = shouldReplaceWithSpawn ? [] : current.filter((a) => a.alive);
+    let occupied = nextAnimals.map((a) => a.position);
+
+    templates.forEach((template) => {
+      const spawnFromCave = spawnNewWave(safeCaveTiles, biomePreset, occupied, template, 1);
+      nextAnimals = [...nextAnimals, ...spawnFromCave];
+      occupied = [...occupied, ...spawnFromCave.map((a) => a.position)];
+    });
+
+    animalsRef.current = nextAnimals;
+    setAnimals(nextAnimals);
+    return nextAnimals;
+  }, [safeCaveTiles, biomePreset]);
 
 /** Player attacks an animal by id. Returns event message. */
   const attackAnimal = useCallback((animalId: string): AttackResult => {
@@ -126,21 +177,28 @@ type AttackResult = {
       animalId,
       animalName: '',
       animalEmoji: '',
+      animalRarity: 1,
       experience: 0,
     };
   }
 
-    const nextHp = target.hp - PLAYER_ATTACK_DAMAGE;
+    const attackDamage = Math.max(1, getPlayerAttackDamage());
+    const nextHp = target.hp - attackDamage;
     const nextAlive = nextHp > 0;
     const message = nextAlive
-      ? `You hit ${target.name} ${target.emoji} for ${PLAYER_ATTACK_DAMAGE} damage! (${nextHp}/${target.maxHp} HP)`
+      ? `You hit ${target.name} ${target.emoji} for ${attackDamage} damage! (${nextHp}/${target.maxHp} HP)`
       : `You defeated the ${target.name} ${target.emoji}!`;
 
     const updated = animalsRef.current.map((a) => {
       if (a.id !== animalId || !a.alive) return a;
       return { ...a, hp: Math.max(nextHp, 0), alive: nextAlive };
     });
-    const nextAnimals = updated.every((a) => !a.alive) ? spawnNewWave() : updated;
+    const occupied = updated
+      .filter((a) => a.alive)
+      .map((a) => a.position);
+    const nextAnimals = updated.every((a) => !a.alive)
+      ? spawnNewWave(safeCaveTiles, biomePreset, occupied)
+      : updated;
     animalsRef.current = nextAnimals;
     setAnimals(nextAnimals);
 
@@ -151,9 +209,10 @@ type AttackResult = {
       animalId,
       animalName: target.name,
       animalEmoji: target.emoji,
-      experience: Math.max(1, target.maxHp),
+      animalRarity: target.rarity ?? 1,
+      experience: target.experienceReward,
     };
-  }, []);
+  }, [safeCaveTiles, biomePreset, getPlayerAttackDamage]);
 
   /** Returns all alive animals at the given tile. */
   const getAnimalsAt = useCallback(
@@ -192,6 +251,7 @@ type AttackResult = {
     animals,
     moveAnimals,
     spawnCaveWave,
+    spawnCaveWaveWithTemplates,
     attackAnimal,
     getAnimalsAt,
     getAdjacentHostile,

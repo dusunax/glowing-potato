@@ -16,6 +16,7 @@ export interface TimeAdvanceResult {
   isNewSeason: boolean;
   resourceRefillCount: number;
   caveSpawnCount: number;
+  skeletonSpawnCount: number;
 }
 
 export function useConditions() {
@@ -29,6 +30,7 @@ export function useConditions() {
     let isNewSeason = false;
     let resourceRefillCount = 0;
     let caveSpawnCount = 0;
+    let skeletonSpawnCount = 0;
 
     for (let i = 0; i < stepsToAdvance; i++) {
       const result = advanceTime(next);
@@ -42,6 +44,9 @@ export function useConditions() {
         }
         if (next.day % 3 === 0) {
           caveSpawnCount += 1;
+        }
+        if (next.day % 15 === 0) {
+          skeletonSpawnCount += 1;
         }
       }
 
@@ -58,6 +63,7 @@ export function useConditions() {
       isNewSeason,
       resourceRefillCount,
       caveSpawnCount,
+      skeletonSpawnCount,
     };
   }, [conditions]);
 

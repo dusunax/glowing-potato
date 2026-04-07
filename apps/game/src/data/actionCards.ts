@@ -12,14 +12,14 @@ const CARD_TEMPLATES: CardTemplate[] = [
     name: 'Forage',
     description: 'Search the area and collect one item.',
     emoji: '🌿',
-    rarity: 'common',
+    rarity: 1,
   },
   {
     type: 'explore',
     name: 'Explore',
     description: 'Move to any adjacent tile on the map.',
     emoji: '🚶',
-    rarity: 'common',
+    rarity: 1,
     moveRange: 1,
   },
   {
@@ -27,21 +27,21 @@ const CARD_TEMPLATES: CardTemplate[] = [
     name: 'Rest',
     description: 'Take a break. Time advances by one period.',
     emoji: '⏳',
-    rarity: 'common',
+    rarity: 1,
   },
   {
     type: 'lucky_forage',
     name: 'Lucky Forage',
     description: 'Search with extra luck. Collect 2 items with higher rare odds.',
     emoji: '🌟',
-    rarity: 'uncommon',
+    rarity: 2,
   },
   {
     type: 'sprint',
     name: 'Sprint',
     description: 'Move quickly to a tile up to 2 steps away.',
     emoji: '🏃',
-    rarity: 'uncommon',
+    rarity: 2,
     moveRange: 2,
   },
   {
@@ -49,29 +49,38 @@ const CARD_TEMPLATES: CardTemplate[] = [
     name: 'Scout',
     description: 'Observe surroundings. Reveals spawnable items nearby.',
     emoji: '🔍',
-    rarity: 'uncommon',
+    rarity: 2,
   },
   {
     type: 'weather_shift',
     name: 'Weather Shift',
     description: 'Invoke a change in the weather conditions.',
     emoji: '🌧️',
-    rarity: 'rare',
+    rarity: 3,
+  },
+  {
+    type: 'summon_monster',
+    name: 'Summon Monster',
+    description: 'Summon a wave of creatures from the cave.',
+    emoji: '🩸',
+    rarity: 5,
   },
   {
     type: 'windfall',
     name: 'Windfall',
     description: 'A lucky windfall! Collect 3 items at once.',
     emoji: '💨',
-    rarity: 'rare',
+    rarity: 3,
   },
 ];
 
 /** Number of copies per rarity in the deck. */
-const DECK_WEIGHTS: Record<string, number> = {
-  common: 3,
-  uncommon: 2,
-  rare: 1,
+const DECK_WEIGHTS: Record<1 | 2 | 3 | 4 | 5, number> = {
+  1: 3,
+  2: 2,
+  3: 1,
+  4: 1,
+  5: 1,
 };
 
 let instanceCounter = 0;
@@ -83,8 +92,8 @@ function makeCard(template: CardTemplate): ActionCard {
 /** Returns a fresh full deck (unsorted). */
 export function buildDeck(): ActionCard[] {
   const deck: ActionCard[] = [];
-  for (const template of CARD_TEMPLATES) {
-    const count = DECK_WEIGHTS[template.rarity] ?? 1;
+for (const template of CARD_TEMPLATES) {
+    const count = DECK_WEIGHTS[template.rarity];
     for (let i = 0; i < count; i++) {
       deck.push(makeCard(template));
     }
@@ -100,6 +109,17 @@ export function shuffleDeck(deck: ActionCard[]): ActionCard[] {
     [arr[i], arr[j]] = [arr[j]!, arr[i]!];
   }
   return arr;
+}
+
+export function createSummonMonsterCard(): ActionCard {
+  return {
+    type: 'summon_monster',
+    name: 'Summon Monster',
+    description: 'Summon a wave of creatures from the cave.',
+    emoji: '🩸',
+    rarity: 5,
+    id: `card_${++instanceCounter}`,
+  };
 }
 
 export type { ActionCardType };

@@ -45,13 +45,14 @@ export function useLeaderboard(topN = 10, gameId?: string) {
       const recordsCollection = collection(db, GAME_HISTORY_COLLECTION, normalizedCollection, LEADERBOARD_BUCKET);
       const fetchQuery = query(recordsCollection, limit(Math.max(topN * 20, 200)));
       const snaps = await getDocs(fetchQuery);
-      const unique = new Map<string, ReturnType<typeof toLeaderboardRecord>>();
-
-      snaps.docs.forEach((docSnap) => {
-        unique.set(docSnap.id, toLeaderboardRecord(docSnap as QueryDocumentSnapshot));
-      });
-
-      const baseRecords = [...unique.values()].sort((a, b) => Number(b.score) - Number(a.score)).slice(0, topN);
+      const baseRecords = snaps.docs
+        .map((docSnap) => toLeaderboardRecord(docSnap as QueryDocumentSnapshot))
+        .sort((a, b) => {
+          const scoreDiff = Number(b.score) - Number(a.score);
+          if (scoreDiff !== 0) return scoreDiff;
+          return b.createdAt - a.createdAt;
+        })
+        .slice(0, topN);
 
       const userIds = [
         ...new Set(

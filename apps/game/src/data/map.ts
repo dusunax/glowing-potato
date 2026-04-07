@@ -1,7 +1,7 @@
 // Static map data: 8x8 grid of biome types, biome info, and maze passage definitions.
 // No logic — pure data only.
 
-import type { BiomeType, BiomeInfo } from '../types/map';
+import type { BiomeType, BiomeInfo, MapBiomePreset } from '../types/map';
 import type { PlayerPosition } from '../types/map';
 
 /**
@@ -32,7 +32,50 @@ export const MAP_GRID: BiomeType[][] = [
 export const MAP_ROWS = MAP_GRID.length;
 export const MAP_COLS = MAP_GRID[0].length;
 
-export const INITIAL_PLAYER_POSITION: PlayerPosition = { x: 0, y: 2 }; // Village
+export const INITIAL_PLAYER_POSITION: PlayerPosition = { x: 0, y: 0 }; // House moved to top-left
+
+const PRESET_BIOME_VARIANTS: Record<MapBiomePreset, BiomeType[]> = {
+  meadow: ['meadow', 'plains', 'forest', 'swamp'],
+  mountain: ['mountain', 'forest', 'plains', 'lake'],
+  beach: ['beach', 'lake', 'swamp', 'plains'],
+  desert: ['desert', 'plains', 'mountain', 'beach'],
+  rock: ['rock', 'plains', 'mountain', 'desert'],
+};
+
+function pickRandomBiomeByPreset(preset: MapBiomePreset): BiomeType {
+  const variants = PRESET_BIOME_VARIANTS[preset];
+  if (Math.random() < 0.8) {
+    return preset;
+  }
+  return variants[Math.floor(Math.random() * variants.length)]!;
+}
+
+/** Creates a randomized biome layout for each game session.
+ *  Cave cells are kept fixed so enemy spawn logic and map theme stay consistent.
+ */
+export function createRandomizedMapGrid(
+  baseGrid: BiomeType[][] = MAP_GRID,
+  chaos = 0.2,
+  presetBiome: MapBiomePreset = 'meadow',
+): BiomeType[][] {
+  const next = baseGrid.map((row) => [...row]);
+
+  for (let y = 0; y < next.length; y += 1) {
+    for (let x = 0; x < next[y]!.length; x += 1) {
+      if (next[y]![x] === 'cave') continue;
+      if (x === INITIAL_PLAYER_POSITION.x && y === INITIAL_PLAYER_POSITION.y) {
+        next[y]![x] = 'village';
+        continue;
+      }
+
+      if (Math.random() < chaos) {
+        next[y]![x] = pickRandomBiomeByPreset(presetBiome);
+      }
+    }
+  }
+
+  return next;
+}
 
 // ── Maze passage definitions ──────────────────────────────────────────────────
 //
@@ -103,7 +146,7 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
     name: 'Mountain',
     description: 'Rocky peaks rich in rare minerals and crystals.',
     categoryBonus: ['mineral'],
-    rarityBonus: ['rare'],
+    rarityBonus: [3],
   },
   lake: {
     type: 'lake',
@@ -132,7 +175,7 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
     name: 'Cave',
     description: 'Dark caverns hiding rare minerals and special finds.',
     categoryBonus: ['mineral', 'special'],
-    rarityBonus: ['rare', 'legendary'],
+    rarityBonus: [3, 4],
   },
   village: {
     type: 'village',
@@ -147,7 +190,7 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
     name: 'Swamp',
     description: 'Murky wetlands with unusual flora and strange creatures.',
     categoryBonus: ['flora', 'creature'],
-    rarityBonus: ['uncommon'],
+    rarityBonus: [2],
   },
   beach: {
     type: 'beach',
@@ -155,5 +198,28 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
     name: 'Beach',
     description: 'Sandy shores where special and mineral finds wash ashore.',
     categoryBonus: ['special', 'mineral'],
+  },
+  desert: {
+    type: 'desert',
+    emoji: '🏜️',
+    name: 'Desert',
+    description: 'Dry heat and sharp winds create a harsh ecosystem.',
+    categoryBonus: ['mineral', 'creature'],
+    rarityBonus: [3],
+  },
+  rock: {
+    type: 'rock',
+    emoji: '🪨',
+    name: 'Rock',
+    description: 'Jagged stone fields with dense mineral veins and armored wildlife.',
+    categoryBonus: ['mineral', 'creature', 'special'],
+    rarityBonus: [4],
+  },
+  everywhere: {
+    type: 'everywhere',
+    emoji: '🌍',
+    name: 'Everywhere',
+    description: 'Can appear in any biome.',
+    categoryBonus: [],
   },
 };

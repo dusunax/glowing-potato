@@ -1,6 +1,7 @@
 export interface AnimalRecord {
   name: string;
   emoji: string;
+  rarity: 1 | 2 | 3 | 4 | 5;
   count: number;
 }
 

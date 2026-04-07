@@ -4,9 +4,9 @@
 //   Slot 1 → always a forage card (forage/lucky_forage/windfall)
 //   Slots 2–3 → skill cards (rest/scout/weather_shift)
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { ActionCard } from '../types/actionCard';
-import { buildDeck, shuffleDeck } from '../data/actionCards';
+import { buildDeck, shuffleDeck, createSummonMonsterCard } from '../data/actionCards';
 
 function isMoveCard(card: ActionCard): boolean {
   return card.type === 'explore' || card.type === 'sprint';
@@ -16,7 +16,18 @@ function isForageCard(card: ActionCard): boolean {
   return card.type === 'forage' || card.type === 'lucky_forage' || card.type === 'windfall';
 }
 
+function isSummonMonsterCard(card: ActionCard): boolean {
+  return card.type === 'summon_monster';
+}
+
 const SKILL_HAND_SIZE = 2; // slots 2–3
+const SUMMON_MONSTER_UNLOCK_DAY = 15;
+
+interface UseActionCardsOptions {
+  currentDay: number;
+  hasUsedSummonMonster: boolean;
+  onSummonMonsterUsed?: () => void;
+}
 
 interface CardState {
   hand: ActionCard[];        // [move, forage, skill, skill]
@@ -26,6 +37,30 @@ interface CardState {
   forageDiscard: ActionCard[];
   skillDeck: ActionCard[];
   skillDiscard: ActionCard[];
+}
+
+function hasSummonMonsterCard(state: CardState): boolean {
+  return (
+    state.hand.some(isSummonMonsterCard) ||
+    state.moveDeck.some(isSummonMonsterCard) ||
+    state.moveDiscard.some(isSummonMonsterCard) ||
+    state.forageDeck.some(isSummonMonsterCard) ||
+    state.forageDiscard.some(isSummonMonsterCard) ||
+    state.skillDeck.some(isSummonMonsterCard) ||
+    state.skillDiscard.some(isSummonMonsterCard)
+  );
+}
+
+function stripSummonCardsFromState(state: CardState): CardState {
+  return {
+    ...state,
+    moveDeck: state.moveDeck.filter((card) => !isSummonMonsterCard(card)),
+    moveDiscard: state.moveDiscard.filter((card) => !isSummonMonsterCard(card)),
+    forageDeck: state.forageDeck.filter((card) => !isSummonMonsterCard(card)),
+    forageDiscard: state.forageDiscard.filter((card) => !isSummonMonsterCard(card)),
+    skillDeck: state.skillDeck.filter((card) => !isSummonMonsterCard(card)),
+    skillDiscard: state.skillDiscard.filter((card) => !isSummonMonsterCard(card)),
+  };
 }
 
 export interface PlayCardOptions {
@@ -44,11 +79,13 @@ function drawOne(
   return [null, deck, discard];
 }
 
-function buildInitialState(): CardState {
+function buildInitialState(currentDay: number, hasUsedSummonMonster: boolean): CardState {
   const full = shuffleDeck(buildDeck());
   const moveCards   = shuffleDeck(full.filter(isMoveCard));
   const forageCards = shuffleDeck(full.filter(isForageCard));
-  const skillCards  = shuffleDeck(full.filter((c) => !isMoveCard(c) && !isForageCard(c)));
+  const skillCards = shuffleDeck(
+    full.filter((c) => !isMoveCard(c) && !isForageCard(c) && (!isSummonMonsterCard(c) || (currentDay >= SUMMON_MONSTER_UNLOCK_DAY && !hasUsedSummonMonster))),
+  );
 
   const hand: ActionCard[] = [
     moveCards[0]!,
@@ -67,9 +104,28 @@ function buildInitialState(): CardState {
   };
 }
 
-export function useActionCards() {
-  const [cardState, setCardState] = useState<CardState>(buildInitialState);
+export function useActionCards({
+  currentDay,
+  hasUsedSummonMonster,
+  onSummonMonsterUsed,
+}: UseActionCardsOptions) {
+  const [cardState, setCardState] = useState<CardState>(() =>
+    buildInitialState(currentDay, hasUsedSummonMonster)
+  );
   const [selectedCard, setSelectedCard] = useState<ActionCard | null>(null);
+
+  useEffect(() => {
+    const isUnlocking = currentDay >= SUMMON_MONSTER_UNLOCK_DAY;
+    if (!isUnlocking || hasUsedSummonMonster) return;
+
+    setCardState((prev) => {
+      if (hasSummonMonsterCard(prev)) return prev;
+      return {
+        ...prev,
+        skillDeck: [...prev.skillDeck, createSummonMonsterCard()],
+      };
+    });
+  }, [currentDay, hasUsedSummonMonster]);
 
   const playCard = useCallback((cardId: string, options: PlayCardOptions = {}) => {
     const shouldPreserve = options.preserveCard === true;
@@ -100,8 +156,31 @@ export function useActionCards() {
         forageDiscard = [...forageDiscard, card];
         [drawn, forageDeck, forageDiscard] = drawOne(forageDeck, forageDiscard);
       } else {
-        skillDiscard = [...skillDiscard, card];
-        [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard);
+        const shouldRemoveSummonCard = isSummonMonsterCard(card);
+        if (shouldRemoveSummonCard) {
+          if (onSummonMonsterUsed) {
+            onSummonMonsterUsed();
+          }
+          skillDeck = skillDeck.filter((c) => !isSummonMonsterCard(c));
+          skillDiscard = skillDiscard.filter((c) => !isSummonMonsterCard(c));
+          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard);
+        } else if (hasUsedSummonMonster) {
+          const stateWithoutSummon = stripSummonCardsFromState({
+            ...prev,
+            moveDeck,
+            moveDiscard,
+            forageDeck,
+            forageDiscard,
+            skillDeck,
+            skillDiscard,
+          });
+          skillDeck = stateWithoutSummon.skillDeck;
+          skillDiscard = [...stateWithoutSummon.skillDiscard];
+          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard);
+        } else {
+          skillDiscard = [...skillDiscard, card];
+          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard);
+        }
       }
 
       const newHand = [...prev.hand];
@@ -114,7 +193,7 @@ export function useActionCards() {
       return { hand: newHand, moveDeck, moveDiscard, forageDeck, forageDiscard, skillDeck, skillDiscard };
     });
     setSelectedCard(null);
-  }, []);
+  }, [hasUsedSummonMonster, onSummonMonsterUsed]);
 
   const selectCard = useCallback((card: ActionCard | null) => {
     setSelectedCard((prev) => (prev?.id === card?.id ? null : card));
