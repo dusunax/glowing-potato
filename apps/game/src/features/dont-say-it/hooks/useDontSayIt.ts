@@ -13,7 +13,7 @@ import {
   set,
   remove,
 } from 'firebase/database';
-import { doc, increment, serverTimestamp, setDoc } from 'firebase/firestore';
+import { addDoc, collection as fsCollection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import type {
   DsiRoomSummary,
   DsiPlayer,
@@ -584,21 +584,20 @@ export function useDontSayIt(currentUserId: string | null = null): UseDontSayItR
           : `guest-${targetGame.localPlayerId}`;
         const safeWinnerUserId = String(winnerUserId || '').trim();
         if (!safeWinnerUserId) return;
-        const leaderboardDoc = doc(
+        const leaderboardBucket = fsCollection(
           firestoreDb,
           FIRESTORE_HISTORY_COLLECTION,
           FIRESTORE_HISTORY_GAME_TYPE,
           DONT_SAY_IT_RECORD_COLLECTION,
-          safeWinnerUserId,
         );
         try {
-          await setDoc(
-            leaderboardDoc,
+          await addDoc(
+            leaderboardBucket,
             {
               userId: safeWinnerUserId,
               nickname: winner?.name,
               gameId: DONT_SAY_IT_LEADERBOARD_GAME_ID,
-              score: increment(1),
+              score: 1,
               survivalDays: 0,
               level: 1,
               totalXpGained: 0,
@@ -606,7 +605,6 @@ export function useDontSayIt(currentUserId: string | null = null): UseDontSayItR
               inventorySnapshot: [],
               createdAt: serverTimestamp(),
             },
-            { merge: true },
           );
         } catch (error) {
           console.error('Failed to save winner record to game_histories/dont_say_it/records (increment)', {
@@ -615,8 +613,8 @@ export function useDontSayIt(currentUserId: string | null = null): UseDontSayItR
             winnerUserId: safeWinnerUserId,
           });
           try {
-            await setDoc(
-              leaderboardDoc,
+            await addDoc(
+              leaderboardBucket,
               {
                 userId: safeWinnerUserId,
                 nickname: winner?.name,
@@ -629,7 +627,6 @@ export function useDontSayIt(currentUserId: string | null = null): UseDontSayItR
                 inventorySnapshot: [],
                 createdAt: serverTimestamp(),
               },
-              { merge: true },
             );
             console.info('Recovered winner record save by writing base winner entry.');
           } catch (fallbackError) {

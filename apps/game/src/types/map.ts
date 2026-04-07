@@ -1,5 +1,7 @@
 // Types for the world map system: biomes, tiles, and player position.
 
+import type { ItemRarity } from './items';
+
 export type BiomeType =
   | 'forest'
   | 'mountain'
@@ -9,7 +11,12 @@ export type BiomeType =
   | 'cave'
   | 'village'
   | 'swamp'
-  | 'beach';
+  | 'beach'
+  | 'desert'
+  | 'rock'
+  | 'everywhere';
+
+export type MapBiomePreset = 'meadow' | 'mountain' | 'beach' | 'desert' | 'rock';
 
 export interface BiomeInfo {
   type: BiomeType;
@@ -19,7 +26,7 @@ export interface BiomeInfo {
   /** Item categories that receive a spawn-weight bonus here */
   categoryBonus: string[];
   /** Item rarities that receive an extra spawn-weight bonus here */
-  rarityBonus?: string[];
+  rarityBonus?: ItemRarity[];
 }
 
 export interface PlayerPosition {

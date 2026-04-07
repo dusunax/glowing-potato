@@ -1,7 +1,7 @@
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 export type Weather = 'sunny' | 'cloudy' | 'rainy' | 'stormy' | 'snowy' | 'misty';
 export type TimeOfDay = 'dawn' | 'morning' | 'afternoon' | 'dusk' | 'night' | 'midnight';
-export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
+export type ItemRarity = 1 | 2 | 3 | 4 | 5;
 
 export interface SpawnCondition {
   seasons?: Season[];
@@ -16,7 +16,7 @@ export interface Item {
   description: string;
   rarity: ItemRarity;
   spawnCondition: SpawnCondition;
-  category: 'flora' | 'mineral' | 'creature' | 'crafted' | 'special';
+  category: 'flora' | 'mineral' | 'creature' | 'crafted' | 'special' | 'weapon';
   tags?: string[];
 }
 

@@ -3,11 +3,13 @@
 import type { CSSProperties } from 'react';
 import type { ActionCard } from '../../types/actionCard';
 import { Badge } from '@glowing-potato/ui';
+import type { ItemRarity } from '../../types/items';
 
 interface ActionCardDisplayProps {
   card: ActionCard;
   isSelected: boolean;
   isHighlighted?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   className?: string;
   style?: CSSProperties;
@@ -17,7 +19,7 @@ import type { ActionCardType } from '../../types/actionCard';
 
 // Movement cards: explore/sprint — blue
 // Forage cards: forage/lucky_forage/windfall — green
-// Skill cards: rest/scout/weather_shift — purple
+// Skill cards: rest/scout/weather_shift/summon_monster — purple
 const TYPE_THEME: Record<ActionCardType, { base: string; selected: string; border: string }> = {
   explore:       { base: 'bg-[#295d9e]',   selected: 'bg-blue-900 ring-blue-400',   border: 'border-[#295d9e]/40' },
   sprint:        { base: 'bg-[#295d9e]',   selected: 'bg-blue-900 ring-blue-400',   border: 'border-[#295d9e]/40' },
@@ -27,24 +29,37 @@ const TYPE_THEME: Record<ActionCardType, { base: string; selected: string; borde
   rest:          { base: 'bg-[#443352]', selected: 'bg-violet-900 ring-violet-400', border: 'border-[#443352]/40' },
   scout:         { base: 'bg-[#443352]', selected: 'bg-violet-900 ring-violet-400', border: 'border-[#443352]/40' },
   weather_shift: { base: 'bg-[#443352]', selected: 'bg-violet-900 ring-violet-400', border: 'border-[#443352]/40' },
+  summon_monster:{ base: 'bg-[#443352]', selected: 'bg-violet-900 ring-violet-400', border: 'border-[#443352]/40' },
 };
 
-const RARITY_BADGE: Record<string, 'muted' | 'success' | 'warning'> = {
-  common: 'muted',
-  uncommon: 'success',
-  rare: 'warning',
+const RARITY_BADGE: Record<ItemRarity, 'muted' | 'success' | 'warning' | 'danger'> = {
+  1: 'muted',
+  2: 'muted',
+  3: 'success',
+  4: 'warning',
+  5: 'danger',
+};
+
+const RARITY_LABELS: Record<ItemRarity, string> = {
+  1: '⭐',
+  2: '⭐⭐',
+  3: '⭐⭐⭐',
+  4: '⭐⭐⭐⭐',
+  5: '⭐⭐⭐⭐⭐',
 };
 
 export function ActionCardDisplay({
   card,
   isSelected,
   isHighlighted = false,
+  disabled = false,
   onClick,
   className = '',
   style,
 }: ActionCardDisplayProps) {
   const theme = TYPE_THEME[card.type];
   const badgeVariant = RARITY_BADGE[card.rarity] ?? 'muted';
+  const rarityLabel = RARITY_LABELS[card.rarity] ?? '⭐';
 
   return (
     <div className='h-full'>
@@ -52,11 +67,16 @@ export function ActionCardDisplay({
       <div className='absolute inset-0 rounded-xl ring-1 ring-gp-mint -top-1 bg-black pointer-events-none' />
       <div className='absolute inset-0 rounded-xl ring-1 ring-gp-mint -top-0.5 bg-black pointer-events-none' />
       <button
-        onClick={onClick}
+        type="button"
+        onClick={disabled ? undefined : onClick}
+        disabled={disabled}
         style={style}
         className={[
           'flex flex-col h-full gap-1 p-4 rounded-xl border w-full relative z-1 ',
-          'transition-all duration-200 cursor-pointer focus-visible:outline-none',
+          'transition-all duration-200 focus-visible:outline-none',
+          disabled
+            ? 'cursor-not-allowed opacity-50'
+            : 'cursor-pointer',
           'focus-visible:ring-2 focus-visible:ring-gp-mint',
           theme.border,
           isSelected
@@ -73,7 +93,7 @@ export function ActionCardDisplay({
           {/* text-gp-mint/70 on gp-surface: ~3.65:1 — acceptable for small hint text ✓ */}
           <div className="text-xs text-gp-mint/70 mt-1 text-left">{card.description}</div>
         </div>
-        <Badge label={card.rarity} variant={badgeVariant} className='justify-center' />
+        <Badge label={rarityLabel} variant={badgeVariant} className='justify-center' />
       </button>
     </div>
   );

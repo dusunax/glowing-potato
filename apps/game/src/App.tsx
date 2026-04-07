@@ -25,6 +25,7 @@ import { useLeaderboard } from './hooks/useLeaderboard';
 import { LeaderboardPopup } from './features/leaderboard/LeaderboardPopup';
 import type { ActionCard } from './types/actionCard';
 import type { User } from 'firebase/auth';
+import type { MapBiomePreset } from './types/map';
 
 // ── Small inline condition badge ─────────────────────────────────────────────
 
@@ -81,15 +82,48 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'spawnable',  label: '🌍 Spawnable' },
 ];
 
+const BIOME_PRESET_OPTIONS: Array<{ value: MapBiomePreset; label: string }> = [
+  { value: 'meadow', label: 'Meadow' },
+  { value: 'mountain', label: 'Mountain' },
+  { value: 'beach', label: 'Sea' },
+  { value: 'desert', label: 'Desert' },
+  { value: 'rock', label: 'Rock' },
+];
+const BIOME_DIFFICULTY_LABEL: Record<MapBiomePreset, string> = {
+  meadow: 'Easy',
+  mountain: 'Normal',
+  beach: 'Hard',
+  desert: 'Extreme',
+  rock: 'Extreme',
+};
+const BIOME_PRESET_LABEL: Record<MapBiomePreset, string> = BIOME_PRESET_OPTIONS.reduce(
+  (acc, option) => ({
+    ...acc,
+    [option.value]: option.label,
+  }),
+  {} as Record<MapBiomePreset, string>,
+);
 function CollectionGame({
   onBack,
   onRestart,
+  mapBiome,
   user,
 }: {
   onBack: () => void;
   onRestart: () => void;
+  mapBiome: MapBiomePreset;
   user?: User | null;
 }) {
+  const guestScoreUserId = useMemo(() => {
+    if (typeof window === 'undefined') return `guest-${Math.floor(Math.random() * 1000000000)}`;
+    const storageKey = 'glowing-potato-guest-score-id';
+    const cached = window.localStorage.getItem(storageKey);
+    if (cached && cached.trim()) return cached.trim();
+    const next = `guest-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+    window.localStorage.setItem(storageKey, next);
+    return next;
+  }, []);
+
   const {
     conditions,
     playerHp,
@@ -108,6 +142,7 @@ function CollectionGame({
     totalXpGained,
     defeatedAnimals,
     position,
+    mapGrid,
     currentBiomeInfo,
     visitedTiles,
     knownTiles,
@@ -117,14 +152,20 @@ function CollectionGame({
     getAnimalsAt,
     getAdjacentAnimals,
     animals,
+    deathCause,
+    scoutRevealLevel,
+    scoutPoints,
+    selectedSpawnLayer,
+    setSelectedSpawnLayer,
     hand,
     selectedCard,
     selectCard,
     handlePlayCard,
     handleStrike,
     handleUseItem,
+    pushEvent,
     deckSize,
-  } = useGameState();
+  } = useGameState(mapBiome);
 
   const { saveRecord } = useScoreRecord();
   const savedRef = useRef(false);
@@ -138,19 +179,25 @@ function CollectionGame({
 
   const finalScore = useMemo(() => {
     if (!isPlayerDead) return 0;
-    return calculateScore({
-      survivalDays: conditions.day,
-      level: playerLevel,
-      totalXpGained,
-      inventorySnapshot: inventory,
-      getItemRarity: (id) => getItemById(id)?.rarity ?? 'common',
+      return calculateScore({
+        survivalDays: conditions.day,
+        level: playerLevel,
+        totalXpGained,
+        inventorySnapshot: inventory,
+        getItemRarity: (id) => getItemById(id)?.rarity ?? 1,
     });
   }, [isPlayerDead, conditions.day, playerLevel, totalXpGained, inventory]);
+
+  const canCollectFromCurrentTile = getTileResources(position.x, position.y) > 0;
+
+  const isForageCard = useCallback((cardType: ActionCard['type']) =>
+    cardType === 'forage' || cardType === 'lucky_forage' || cardType === 'windfall',
+  []);
 
   useEffect(() => {
     if (!isPlayerDead || savedRef.current) return;
     savedRef.current = true;
-    const recordUserId = user?.uid ?? `guest-${Math.floor(Math.random() * 1000000000)}`;
+    const recordUserId = user?.uid ?? guestScoreUserId;
     (async () => {
       await saveRecord({
         userId: recordUserId,
@@ -167,6 +214,7 @@ function CollectionGame({
   }, [
     isPlayerDead,
     user,
+    guestScoreUserId,
     finalScore,
     conditions.day,
     playerLevel,
@@ -201,6 +249,7 @@ function CollectionGame({
   }, [leaderboardRecords, finalScore]);
 
   const BELT_SLOT_COUNT = 8;
+  const WEAPON_BELT_SLOT_INDEX = 0;
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [beltSlots, setBeltSlots] = useState<(string | null)[]>(() =>
     Array.from({ length: BELT_SLOT_COUNT }, () => null as string | null)
@@ -223,6 +272,7 @@ function CollectionGame({
 
   function onCardClick(card: ActionCard) {
     if (isPlayerDead) return;
+    if (isForageCard(card.type) && !canCollectFromCurrentTile) return;
     if (card.type === 'explore' || card.type === 'sprint') {
       // Toggle selection — requires a map tile target
       selectCard(card);
@@ -262,12 +312,55 @@ function CollectionGame({
   const isTargetingCard = selectedCard && (
     selectedCard.type === 'explore' || selectedCard.type === 'sprint'
   );
-  const canUseItem = useCallback((itemId: string) => {
+  const canUseItem = useCallback((itemId: string, slotIndex = 0) => {
     const item = getItemById(itemId);
-    const tags = item?.tags ?? [];
-    return tags.includes('cooking') || tags.includes('potion');
+    if (!item) return false;
+    if (item.category === 'weapon') return slotIndex === WEAPON_BELT_SLOT_INDEX;
+    const tags = item.tags ?? [];
+    if (slotIndex === WEAPON_BELT_SLOT_INDEX) return false;
+    return tags.includes('food') || tags.includes('cooking') || tags.includes('potion');
   }, []);
+  const isConsumableBeltItem = useCallback((itemId: string) => {
+    const item = getItemById(itemId);
+    if (!item || item.category === 'weapon') return false;
+    const tags = item.tags ?? [];
+    return tags.includes('food') || tags.includes('cooking') || tags.includes('potion');
+  }, []);
+  const prevInventoryRef = useRef<Map<string, number> | null>(null);
 
+  useEffect(() => {
+    const currentInventory = new Map(inventory.map((slot) => [slot.itemId, slot.quantity]));
+    if (!prevInventoryRef.current) {
+      prevInventoryRef.current = currentInventory;
+      return;
+    }
+
+    const previousInventory = prevInventoryRef.current;
+    const gainedConsumableItems = Array.from(currentInventory.entries())
+      .filter(([itemId, qty]) => qty > (previousInventory.get(itemId) ?? 0) && isConsumableBeltItem(itemId));
+
+    if (gainedConsumableItems.length > 0) {
+      setBeltSlots((prev) => {
+        let next = [...prev];
+        let updated = false;
+        for (const [itemId] of gainedConsumableItems) {
+          const alreadyAssigned = next.some((assignedItemId, slotIndex) => slotIndex !== WEAPON_BELT_SLOT_INDEX && assignedItemId === itemId);
+          if (alreadyAssigned) continue;
+
+          const emptySlotIndex = next.findIndex((assignedItemId, slotIndex) => slotIndex !== WEAPON_BELT_SLOT_INDEX && !assignedItemId);
+          if (emptySlotIndex === -1) continue;
+          next = [...next];
+          next[emptySlotIndex] = itemId;
+          updated = true;
+        }
+
+        if (!updated) return prev;
+        return next;
+      });
+    }
+
+    prevInventoryRef.current = currentInventory;
+  }, [inventory, isConsumableBeltItem]);
   const beltSlotData = useMemo(() => {
     const quantityByItemId = new Map(inventory.map((slot) => [slot.itemId, slot.quantity]));
     return beltSlots.map((slotItemId) => {
@@ -280,14 +373,20 @@ function CollectionGame({
 
   const canAssignSlot = useCallback(
     (slotIndex: number, itemId: string) => {
-      if (!canUseItem(itemId)) return false;
       const stock = getQuantity(itemId);
       if (stock <= 0) return false;
+      const item = getItemById(itemId);
+      if (!item) return false;
+      if (slotIndex === WEAPON_BELT_SLOT_INDEX) {
+        return item.category === 'weapon';
+      }
+      if (item.category === 'weapon') return false;
+      if (!canUseItem(itemId, slotIndex)) return false;
       const alreadyUsed = beltSlots.reduce((total, assignedItemId, i) => {
         if (assignedItemId === itemId && i !== slotIndex) return total + 1;
         return total;
       }, 0);
-      return alreadyUsed < stock;
+      return alreadyUsed <= stock;
     },
     [beltSlots, canUseItem, getQuantity]
   );
@@ -301,6 +400,10 @@ function CollectionGame({
     if (!canAssignSlot(slotIndex, itemId)) return;
     setBeltSlots((prev) => {
       const next = [...prev];
+      const existingIndex = next.findIndex((assignedItemId, idx) => idx !== slotIndex && assignedItemId === itemId);
+      if (existingIndex >= 0) {
+        next[existingIndex] = null;
+      }
       next[slotIndex] = itemId;
       return next;
     });
@@ -319,10 +422,20 @@ function CollectionGame({
     if (isPlayerDead) return;
     const stock = getQuantity(itemId);
     if (stock <= 0) return;
+
+    const item = getItemById(itemId);
+    if (!item) return;
+    if (item.category === 'weapon') {
+      pushEvent(`🗡️ Weapon ready: ${item.name}.`, 'success');
+      return;
+    }
     handleUseItem(itemId);
   }
 
   const eventLog = useMemo(() => [...events].reverse().slice(0, 8), [events]);
+  const getLabeledAnimalDisplayName = useCallback((animalName: string) => {
+    return `${BIOME_PRESET_LABEL[mapBiome]} ${animalName}`;
+  }, [mapBiome]);
 
   useEffect(() => {
     return () => {
@@ -331,6 +444,53 @@ function CollectionGame({
       }
     };
   }, []);
+
+  useEffect(() => {
+    setBeltSlots((prev) => {
+      const quantityByItemId = new Map(inventory.map((slot) => [slot.itemId, slot.quantity]));
+      const next = prev.map((itemId, index) => {
+        if (!itemId) return null;
+        const quantity = quantityByItemId.get(itemId) ?? 0;
+        if (quantity <= 0) return null;
+
+        const item = getItemById(itemId);
+        if (!item) return null;
+        if (index === WEAPON_BELT_SLOT_INDEX && item.category !== 'weapon') return null;
+        if (index !== WEAPON_BELT_SLOT_INDEX && item.category === 'weapon') return null;
+        return itemId;
+      });
+
+      if (next.every((itemId, index) => itemId === prev[index])) return prev;
+      return next;
+    });
+  }, [inventory, WEAPON_BELT_SLOT_INDEX]);
+
+  useEffect(() => {
+    const handleQuickUseKeydown = (event: KeyboardEvent) => {
+      if (isPlayerDead || activeTab !== 'game') return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName.toLowerCase() === 'input' ||
+          target.tagName.toLowerCase() === 'textarea' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = event.key;
+      if (key >= '1' && key <= '7') {
+        if (event.repeat) return;
+        const slotIndex = Number(key);
+        const slot = beltSlotData[slotIndex];
+        if (!slot) return;
+        handleBeltUse(slot.itemId);
+      }
+    };
+
+    window.addEventListener('keydown', handleQuickUseKeydown);
+    return () => window.removeEventListener('keydown', handleQuickUseKeydown);
+  }, [activeTab, isPlayerDead, beltSlotData, handleBeltUse]);
 
   const emptySlotClass = 'min-h-[64px] border border-dashed border-gp-mint/55 rounded-lg';
   const emptySlotStyle = {
@@ -347,6 +507,7 @@ function CollectionGame({
         <MapPanel
           position={position}
           selectedCard={selectedCard}
+          mapGrid={mapGrid}
           showPlayerMoveHint={moveCardFlash}
           onTileClick={onTileClick}
           currentBiomeInfo={currentBiomeInfo}
@@ -366,14 +527,16 @@ function CollectionGame({
           </div>
         <div className="grid grid-cols-8 gap-2">
             {beltSlotData.map((slot, index) => {
+              const isWeaponSlot = index === WEAPON_BELT_SLOT_INDEX;
+              const slotLabel = isWeaponSlot ? 'W' : `${index}`;
               if (!slot) {
                 return (
                   <button
                     key={`belt-empty-${index}`}
                     type="button"
-                    className="relative min-h-12 rounded-lg border border-gp-accent/30 transition-colors bg-gp-bg/20 hover:border-gp-accent/50"
+                    className={`relative min-h-12 rounded-lg border transition-colors bg-gp-bg/20 ${isWeaponSlot ? 'border-gp-mint/80 bg-gp-mint/15' : 'border-gp-accent/30 hover:border-gp-accent/50'}`}
                   >
-                    <span className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">#{index + 1}</span>
+                    <span className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">{slotLabel}</span>
                       <div className={`${emptySlotClass}`} style={emptySlotStyle} />
                   </button>
                 );
@@ -388,20 +551,26 @@ function CollectionGame({
                 />
               );
 
-              const canUse = canUseItem(slot.itemId);
-              return (
-                <button
-                  key={`belt-slot-${index}-${slot.itemId}`}
-                  onClick={() => handleBeltUse(slot.itemId)}
-                  disabled={!canUse || isPlayerDead}
-                  title={item.name}
-                  className={`relative h-14 rounded-lg border ${canUse && !isPlayerDead ? 'border-gp-accent/60 bg-gp-bg/40 hover:border-gp-accent' : 'border-gp-accent/25 bg-gp-bg/20 opacity-60'} transition-colors`}
+                const canUse = canUseItem(slot.itemId, index);
+                const weaponAttackPower = item.attackPower;
+                return (
+                  <button
+                    key={`belt-slot-${index}-${slot.itemId}`}
+                    onClick={() => handleBeltUse(slot.itemId)}
+                    disabled={!canUse || isPlayerDead}
+                    title={item.name}
+                  className={`relative h-full flex items-center justify-center rounded-lg border ${isWeaponSlot ? 'border-gp-mint/80 bg-gp-mint/10' : ''} ${canUse && !isPlayerDead ? 'border-gp-accent/60 bg-gp-bg/40 hover:border-gp-accent' : 'border-gp-accent/25 bg-gp-bg/20 opacity-60'} transition-colors`}
                 >
-                  <span className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">#{index + 1}</span>
-                  <div className="absolute inset-x-2 top-1 text-2xl leading-none text-center">{item.emoji}</div>
-                  <div className="absolute bottom-1 left-1 right-1 flex justify-between items-end">
-                    <span className="text-[11px] text-gp-mint/90 truncate">{item.name}</span>
-                    <span className="text-xs text-gp-mint font-semibold">×{slot.quantity}</span>
+                  <span className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">{slotLabel}</span>
+                  <span className='text-2xl leading-none text-center'>
+                    {item.emoji}
+                  </span>
+                  <div className="absolute bottom-1 right-1 text-sm">
+                    {typeof weaponAttackPower === 'number' ? (
+                      <span className="text-xs text-emerald-300 font-bold">+{weaponAttackPower}</span>
+                    ) : (
+                      <span className="text-xs text-gp-mint font-semibold">×{slot.quantity}</span>
+                    )}
                   </div>
                 </button>
               );
@@ -420,6 +589,7 @@ function CollectionGame({
             {hand.map((card, index) => {
               const isSelected = selectedCard?.id === card.id;
               const stackTheme = getCardStackTheme(card.type);
+              const isForageDisabled = isForageCard(card.type) && !canCollectFromCurrentTile;
               return (
                 <div key={card.id} className="relative min-h-[13rem]">
                   <div
@@ -434,6 +604,7 @@ function CollectionGame({
                   <ActionCardDisplay
                     card={card}
                     isSelected={isSelected}
+                    disabled={isForageDisabled || isPlayerDead}
                     isHighlighted={moveCardFlash && isSelected}
                     onClick={() => onCardClick(card)}
                     className={isPlayerDead ? 'opacity-60' : ''}
@@ -459,10 +630,15 @@ function CollectionGame({
           <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-3">
             <h3 className="text-sm font-semibold text-red-300 mb-2">⚠️ Nearby Animals</h3>
             <div className="flex flex-wrap gap-2">
-              {adjacentAnimals.map((a) => (
-                <div key={a.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gp-bg/40 border border-red-500/20">
+              {adjacentAnimals.map((a, index) => (
+                <div
+                  key={`${a.id}-${a.position.x}-${a.position.y}-${index}`}
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gp-bg/40 border border-red-500/20"
+                >
                   <span>{a.emoji}</span>
-                  <span className="text-xs text-gp-mint/85">{a.name}</span>
+                  <span className="text-xs text-gp-mint/85">
+                    {getLabeledAnimalDisplayName(a.name)}
+                  </span>
                   <span className={`text-xs font-bold ${a.behavior === 'hostile' ? 'text-red-400' : 'text-emerald-400'}`}>
                     {a.behavior === 'hostile' ? '⚔️' : '🕊️'}
                   </span>
@@ -486,7 +662,7 @@ function CollectionGame({
             <div className="space-y-1.5 overflow-y-auto max-h-56">
               {eventLog.map((ev) => (
                 <div
-                  key={ev.id}
+                  key={`${ev.id}-${ev.timestamp}`}
                   className={`text-sm px-3 py-1.5 rounded-lg ${
                     ev.type === 'success'
                       ? 'bg-gp-accent/20 text-gp-mint'
@@ -520,6 +696,9 @@ function CollectionGame({
             <CondPill emoji={TIME_PERIOD_EMOJIS[conditions.timePeriod]} label={conditions.timePeriod} />
             <CondPill emoji={WEATHER_EMOJIS[conditions.weather] ?? '🌤️'} label={conditions.weather} />
             <CondPill emoji="🍃" label={conditions.season} labelClass={seasonColorClass} />
+            <div className="text-xs text-gp-mint/90 px-2 py-1 rounded-lg bg-gp-bg/40 border border-gp-accent/20">
+              🗺️ Map Biome: {BIOME_PRESET_LABEL[mapBiome]}
+            </div>
 
             {/* Player HP */}
             <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gp-bg/40 border border-gp-accent/20">
@@ -614,15 +793,28 @@ function CollectionGame({
                           <div>{totalXpGained}</div>
                         </div>
                       </div>
+                      <div className="text-xs text-gp-mint/80 text-left">
+                        Difficulty: <span className="font-semibold">{BIOME_DIFFICULTY_LABEL[mapBiome]}</span>
+                      </div>
+                      {deathCause ? (
+                        <p className="text-xs text-red-300/90 text-left">
+                          Cause: <span className="font-semibold">{deathCause}</span>
+                        </p>
+                      ) : null}
                       {defeatedAnimals.length > 0 && (
                         <div className="text-xs text-gp-mint/70">
                           <div className="font-semibold text-gp-mint mb-1">🐾 Animals defeated</div>
-                          <div className="flex flex-wrap justify-center gap-1.5">
-                            {defeatedAnimals.map((a) => (
-                              <span key={a.name} className="px-2 py-0.5 rounded-full bg-gp-bg/40 border border-gp-accent/30">
-                                {a.emoji} {a.name} ×{a.count}
-                              </span>
-                            ))}
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                          {defeatedAnimals.map((a, index) => (
+                            <span
+                              key={`${a.name}-${a.emoji}-${a.rarity}-${index}`}
+                              className="px-2 py-0.5 rounded-full bg-gp-bg/40 border border-gp-accent/30 inline-flex items-center gap-1.5"
+                            >
+                              <span>{a.emoji}</span>
+                              <span>{getLabeledAnimalDisplayName(a.name)}</span>
+                              <span>×{a.count}</span>
+                            </span>
+                          ))}
                           </div>
                         </div>
                       )}
@@ -687,7 +879,14 @@ function CollectionGame({
                     <DiscoveryPanel discovered={discovered} />
                   </section>
                   <section className="w-full shrink-0">
-                    <SpawnPanel conditions={conditions} />
+                    <SpawnPanel
+                      conditions={conditions}
+                      biomeType={currentBiomeInfo.type}
+                      scoutPoints={scoutPoints}
+                      scoutRevealLevel={scoutRevealLevel}
+                      selectedSpawnLayer={selectedSpawnLayer}
+                      onSelectSpawnLayer={setSelectedSpawnLayer}
+                    />
                   </section>
                 </div>
               </div>
@@ -704,6 +903,8 @@ function CollectionGame({
 export default function App() {
   const [activeGame, setActiveGame] = useState<string | null>(null);
   const [collectionGameSession, setCollectionGameSession] = useState(0);
+  const [collectionGameReady, setCollectionGameReady] = useState(false);
+  const [collectionBiome, setCollectionBiome] = useState<MapBiomePreset>('meadow');
   const [signInError, setSignInError] = useState<string | null>(null);
   const { user, nickname, loading, signInWithGoogle, signOut, updateNickname } = useAuth();
 
@@ -725,12 +926,72 @@ export default function App() {
     );
   }
 
+  function handleCollectionBiomeChange(nextBiome: MapBiomePreset) {
+    setCollectionBiome(nextBiome);
+    if (collectionGameReady) {
+      setCollectionGameSession((prev) => prev + 1);
+    }
+  }
+
+  function startCollectionGame() {
+    setCollectionGameReady(true);
+    setCollectionGameSession((prev) => prev + 1);
+  }
+
+  function openCollectionGame() {
+    setCollectionGameReady(false);
+    setActiveGame('collection');
+  }
+
   if (activeGame === 'collection') {
+    if (!collectionGameReady) {
+      return (
+        <div className="min-h-screen bg-gp-bg flex items-center justify-center p-4">
+          <div className="bg-gp-surface rounded-xl border border-gp-accent/30 shadow-lg p-6 w-full max-w-md space-y-4">
+            <h2 className="text-xl font-bold text-gp-mint">🌿 Glowing Potato</h2>
+            <p className="text-sm text-gp-mint/80">Select a map biome before starting.</p>
+            <label className="block">
+              <span className="text-xs text-gp-mint/80">Map Biome</span>
+              <select
+                value={collectionBiome}
+                onChange={(event) => handleCollectionBiomeChange(event.target.value as MapBiomePreset)}
+                className="mt-2 w-full bg-gp-bg text-gp-mint border border-gp-accent/30 rounded-lg px-3 py-2"
+              >
+                {BIOME_PRESET_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-gp-bg">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="rounded-lg border border-gp-accent/40 bg-gp-bg/55 px-3 py-2">
+              <p className="text-xs text-gp-mint/75">Mode</p>
+              <p className="text-sm font-bold text-gp-mint">
+                {BIOME_PRESET_LABEL[collectionBiome]} · {BIOME_DIFFICULTY_LABEL[collectionBiome]}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => { setActiveGame(null); setCollectionGameReady(false); }} className="flex-1">
+                Back
+              </Button>
+              <Button variant="primary" onClick={startCollectionGame} className="flex-1">
+                Start
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <CollectionGame
-        key={collectionGameSession}
-        onBack={() => setActiveGame(null)}
+        key={`${collectionGameSession}-${collectionBiome}`}
+        onBack={() => {
+          setActiveGame(null);
+          setCollectionGameReady(false);
+        }}
         onRestart={() => setCollectionGameSession((prev) => prev + 1)}
+        mapBiome={collectionBiome}
         user={user}
       />
     );
@@ -758,7 +1019,13 @@ export default function App() {
         </div>
       )}
       <GameLobby
-        onSelectGame={setActiveGame}
+        onSelectGame={(gameId) => {
+          if (gameId === 'collection') {
+            openCollectionGame();
+            return;
+          }
+          setActiveGame(gameId);
+        }}
         user={user}
         nickname={nickname}
         onSignIn={handleSignIn}

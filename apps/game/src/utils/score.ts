@@ -1,10 +1,11 @@
 import type { ItemRarity } from '../types/items';
 
 const RARITY_POINTS: Record<ItemRarity, number> = {
-  common: 1,
-  uncommon: 3,
-  rare: 5,
-  legendary: 10,
+  1: 1,
+  2: 3,
+  3: 5,
+  4: 10,
+  5: 15,
 };
 
 export function calculateScore({

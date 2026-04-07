@@ -2,9 +2,10 @@
 // Exposes position, movement helpers, fog-of-war visited tiles, and per-tile resource limits.
 
 import { useState, useCallback, useMemo, useRef } from 'react';
-import type { PlayerPosition } from '../types/map';
+import type { BiomeType, PlayerPosition, MapBiomePreset } from '../types/map';
 import {
   MAP_GRID, MAP_ROWS, MAP_COLS, INITIAL_PLAYER_POSITION, BIOME_INFO,
+  createRandomizedMapGrid,
   getMazeNeighbors, hasPassage,
 } from '../data/map';
 
@@ -13,25 +14,43 @@ export function tileKey(x: number, y: number): string {
   return `${x},${y}`;
 }
 
-/** Random tile resource count: 1–3. */
+/** Random tile resource count: 1–3 (village is forced to 5). */
 function randomResources(): number {
   return Math.floor(Math.random() * 3) + 1;
 }
 
-/** Build the initial resource map: every tile gets 1–3 resources. */
-function buildInitialResources(): Record<string, number> {
+function getInitialResourcesForTile(biomeType: string): number {
+  if (biomeType === 'village') {
+    return 5;
+  }
+  return randomResources();
+}
+
+/** Build the initial resource map: every tile gets 1–10 resources. */
+function buildInitialResources(mapGrid: BiomeType[][]): Record<string, number> {
   const res: Record<string, number> = {};
   for (let y = 0; y < MAP_ROWS; y++) {
     for (let x = 0; x < MAP_COLS; x++) {
-      const isCave = MAP_GRID[y]?.[x] === 'cave';
-      res[tileKey(x, y)] = isCave ? 0 : randomResources();
+      res[tileKey(x, y)] = getInitialResourcesForTile(mapGrid[y]![x]);
     }
   }
   return res;
 }
 
-export function useMap() {
+export function useMap(startBiomePreset: MapBiomePreset = 'meadow') {
+  const [mapGrid] = useState(() => createRandomizedMapGrid(MAP_GRID, 0.2, startBiomePreset));
   const [position, setPosition] = useState<PlayerPosition>(INITIAL_PLAYER_POSITION);
+
+  const caveTiles = useMemo(
+    () =>
+      mapGrid.reduce<Array<{ x: number; y: number }>>((acc, row, y) =>
+        row.reduce<Array<{ x: number; y: number }>>((a, biome, x) => {
+          if (biome === 'cave') a.push({ x, y });
+          return a;
+        }, acc),
+      []),
+    [mapGrid]
+  );
 
   // Fog of war: track which tiles the player has visited
   const [visitedTiles, setVisitedTiles] = useState<Set<string>>(
@@ -39,12 +58,22 @@ export function useMap() {
   );
 
   // Resource caps are fixed per tile (1–3 per tile), and current resources are tracked separately.
-  const tileResourceCapsRef = useRef<Record<string, number>>(buildInitialResources());
+  const tileResourceCapsRef = useRef<Record<string, number>>(buildInitialResources(mapGrid));
   // Per-tile resource values are stored in a ref for synchronous reads
   // and shadowed in state to drive re-renders.
   const tileResourcesRef = useRef<Record<string, number>>({ ...tileResourceCapsRef.current });
   // The state counter exists solely to trigger re-renders when resources are consumed.
   const [, setTileResourcesVersion] = useState(0);
+
+  const getBiomeTypeAt = useCallback(
+    (x: number, y: number): BiomeType => mapGrid[y]?.[x] ?? 'plains',
+    [mapGrid]
+  );
+
+  const getBiomeInfoAt = useCallback(
+    (x: number, y: number) => BIOME_INFO[getBiomeTypeAt(x, y)],
+    [getBiomeTypeAt]
+  );
 
   /** BFS-based reachability: returns all tile keys reachable in ≤ maxSteps through maze passages. */
   const getReachableTiles = useCallback(
@@ -161,8 +190,8 @@ export function useMap() {
     setTileResourcesVersion((v) => v + 1);
   }, []);
 
-  const currentBiomeType = MAP_GRID[position.y][position.x];
-  const currentBiomeInfo = BIOME_INFO[currentBiomeType];
+  const currentBiomeType = getBiomeTypeAt(position.x, position.y);
+  const currentBiomeInfo = getBiomeInfoAt(position.x, position.y);
 
   /** Tiles the player hasn't visited but knows exist (all 8 neighbours of visited tiles). */
   const knownTiles = useMemo(() => {
@@ -198,7 +227,11 @@ export function useMap() {
     replenishTileResources,
     getReachableTiles,
     getPathLength,
+    getBiomeTypeAt,
+    getBiomeInfoAt,
     MAP_ROWS,
     MAP_COLS,
+    mapGrid,
+    caveTiles,
   };
 }

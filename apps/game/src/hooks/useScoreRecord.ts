@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { getFirestoreDb } from '../features/dont-say-it/lib/firebase';
-import type { GameRecord } from '../types/score';
+import type { AnimalRecord, GameRecord } from '../types/score';
 
 const GAME_HISTORY_COLLECTION = 'game_histories';
 const LEADERBOARD_BUCKET = 'records';
@@ -17,10 +17,17 @@ function sanitizeGameRecord(record: Omit<GameRecord, 'id' | 'createdAt'>) {
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
   };
+  const normalizeRarity = (value: unknown): AnimalRecord['rarity'] => {
+    if (value === 1 || value === 2 || value === 3 || value === 4 || value === 5) {
+      return value;
+    }
+    return 1;
+  };
 
   return {
     userId: String(record.userId || ''),
     gameId: String(record.gameId || 'collection'),
+    nickname: String((record as { nickname?: string }).nickname || 'Guest'),
     score: toNumber(record.score, 0),
     survivalDays: toNumber(record.survivalDays, 0),
     level: toNumber(record.level, 1),
@@ -29,6 +36,7 @@ function sanitizeGameRecord(record: Omit<GameRecord, 'id' | 'createdAt'>) {
       ? record.defeatedAnimals.map((animal) => ({
           name: String(animal?.name || ''),
           emoji: String(animal?.emoji || ''),
+          rarity: normalizeRarity((animal as { rarity?: unknown })?.rarity),
           count: Math.max(0, toNumber(animal?.count, 0)),
         }))
       : [],
@@ -54,12 +62,12 @@ export function useScoreRecord() {
         return null;
       }
       const leaderboardCollection = resolveGameHistoryCollection(payload.gameId);
-      const recordsCollection = collection(db, GAME_HISTORY_COLLECTION, leaderboardCollection, LEADERBOARD_BUCKET);
-      const ref = await addDoc(recordsCollection, {
+      const bucket = collection(db, GAME_HISTORY_COLLECTION, leaderboardCollection, LEADERBOARD_BUCKET);
+      const recordRef = await addDoc(bucket, {
         ...payload,
         createdAt: serverTimestamp(),
       });
-      return ref.id;
+      return recordRef.id;
     } catch (error) {
       console.error('Failed to save game record to game_histories', {
         code: typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: string }).code : 'unknown',

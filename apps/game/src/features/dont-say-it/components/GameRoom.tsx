@@ -236,7 +236,10 @@ function WaitingView({ game, onStartGame }: { game: DsiGameState; onStartGame: (
         ))}
         {/* Empty slots */}
         {Array.from({ length: Math.max(0, maxPlayers - game.players.length) }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-gp-surface/20 border border-dashed border-gp-accent/20">
+          <div
+            key={`empty-slot-${i}`}
+            className="flex items-center gap-3 p-3 rounded-xl bg-gp-surface/20 border border-dashed border-gp-accent/20"
+          >
             <span className="text-lg opacity-30">👤</span>
             <span className="text-gp-mint/30 text-sm">Waiting for player…</span>
           </div>
@@ -294,7 +297,10 @@ function VotingView({ game, onCastVote }: VotingViewProps) {
         </div>
         <div className="flex gap-2">
           {localPlayer.wordSlots.map((slot, si) => (
-            <div key={si} className="flex-1 rounded-lg bg-gp-bg/60 border border-gp-accent/20 p-2 text-center">
+            <div
+              key={`local-${localPlayer.id}-slot-${si}`}
+              className="flex-1 rounded-lg bg-gp-bg/60 border border-gp-accent/20 p-2 text-center"
+            >
               <span className="text-gp-mint/30 text-sm">🔒</span>
               {/* Show vote dots for transparency */}
               <VoteDots votes={slot.votesByWord} />
@@ -313,7 +319,7 @@ function VotingView({ game, onCastVote }: VotingViewProps) {
           </div>
           <div className="space-y-3">
             {player.wordSlots.map((slot, si) => (
-              <div key={si}>
+              <div key={`player-${player.id}-slot-${si}`}>
                 <p className="text-gp-mint/40 text-xs mb-1">Forbidden word</p>
                 <div className="flex gap-2">
                   {slot.candidates.map((word, wi) => {
@@ -323,7 +329,7 @@ function VotingView({ game, onCastVote }: VotingViewProps) {
                     const votePct = totalVotes > 0 ? Math.round((slot.votesByWord[wi] / totalVotes) * 100) : 0;
                     return (
                   <button
-                    key={wi}
+                    key={`vote-${player.id}-${si}-${wi}`}
                     onClick={() => handleVote(player, si, wi)}
                     className={`flex-1 py-2 px-1 rounded-lg border text-xs font-medium transition-all ${
                       isMyVote
@@ -358,7 +364,7 @@ function VoteDots({ votes, highlightIndex }: { votes: number[]; highlightIndex?:
     <span className="flex justify-center gap-0.5 mt-1 h-2">
       {Array.from({ length: display }).map((_, i) => (
         <span
-          key={i}
+          key={`vote-dot-${display}-${i}`}
           className={`w-1.5 h-1.5 rounded-full ${
             highlightIndex !== undefined ? 'bg-gp-accent' : 'bg-gp-mint/40'
           }`}
@@ -582,7 +588,10 @@ function highlightWord(text: string, word: string) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === word.toLowerCase() ? (
-          <mark key={i} className="bg-red-500/40 text-red-200 rounded px-0.5">
+          <mark
+            key={`${part}-${i}`}
+            className="bg-red-500/40 text-red-200 rounded px-0.5"
+          >
             {part}
           </mark>
         ) : (
@@ -636,9 +645,9 @@ function PlayerWordCard({ player }: { player: DsiPlayer }) {
       </div>
       {words.length > 0 ? (
         <div className="space-y-0.5">
-          {words.map((w) => (
+          {words.map((w, wi) => (
             <span
-              key={w}
+              key={`${player.id}-final-word-${w}-${wi}`}
               className="block rounded px-1.5 py-0.5 bg-gp-accent/10 text-gp-mint capitalize"
             >
               {w}

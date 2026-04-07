@@ -3,16 +3,26 @@
 import { ITEMS } from '../../data/items';
 import type { ItemId } from '../../types/items';
 import { Badge, CardTitle } from '@glowing-potato/ui';
+import type { ItemRarity } from '../../types/items';
+import { getItemSpawnHint } from '../../utils/itemHint';
 
 interface DiscoveryPanelProps {
   discovered: Set<ItemId>;
 }
 
-const RARITY_BADGE_MAP: Record<string, 'default' | 'success' | 'warning' | 'muted'> = {
-  common: 'muted',
-  uncommon: 'success',
-  rare: 'default',
-  legendary: 'warning',
+const RARITY_BADGE_MAP: Record<ItemRarity, 'default' | 'success' | 'warning' | 'muted' | 'danger'> = {
+  1: 'muted',
+  2: 'success',
+  3: 'default',
+  4: 'warning',
+  5: 'danger',
+};
+const RARITY_LABELS: Record<ItemRarity, string> = {
+  1: '⭐',
+  2: '⭐⭐',
+  3: '⭐⭐⭐',
+  4: '⭐⭐⭐⭐',
+  5: '⭐⭐⭐⭐⭐',
 };
 
 export function DiscoveryPanel({ discovered }: DiscoveryPanelProps) {
@@ -24,6 +34,7 @@ export function DiscoveryPanel({ discovered }: DiscoveryPanelProps) {
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 overflow-y-auto">
         {ITEMS.map((item) => {
           const found = discovered.has(item.id);
+          const tooltip = found ? getItemSpawnHint(item) : 'Undiscovered item';
           return (
             <div
               key={item.id}
@@ -36,11 +47,14 @@ export function DiscoveryPanel({ discovered }: DiscoveryPanelProps) {
               <div className="text-2xl mb-1">{found ? item.emoji : '❓'}</div>
               <div className="text-xs font-semibold text-gp-mint truncate">{found ? item.name : '???'}</div>
               {found && (
-                <Badge
-                  label={item.rarity}
-                  variant={RARITY_BADGE_MAP[item.rarity] ?? 'muted'}
-                  className="mt-1"
-                />
+                <>
+                  <Badge
+                    label={RARITY_LABELS[item.rarity] ?? '⭐'}
+                    variant={RARITY_BADGE_MAP[item.rarity] ?? 'muted'}
+                    className="mt-1"
+                  />
+                  <div className="text-[10px] text-gp-mint/70 mt-1 break-words">{tooltip}</div>
+                </>
               )}
             </div>
           );
