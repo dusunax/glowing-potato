@@ -19,6 +19,7 @@ import { TIME_PERIOD_EMOJIS } from './constants/timePeriods';
 import { WEATHER_EMOJIS } from './constants/weather';
 import { getSeasonColor } from './utils/time';
 import { getItemById } from './data/items';
+import { TREASURE_TILE } from './data/map';
 import { calculateScore } from './utils/score';
 import { tileKey } from './hooks/useMap';
 import { useLeaderboard } from './hooks/useLeaderboard';
@@ -155,27 +156,44 @@ function CollectionGame({
     deathCause,
     scoutRevealLevel,
     scoutPoints,
+    unlockSpawnLayer,
     selectedSpawnLayer,
     setSelectedSpawnLayer,
     hand,
     selectedCard,
     selectCard,
-    handlePlayCard,
-    handleStrike,
-    handleUseItem,
-    pushEvent,
-    deckSize,
+  handlePlayCard,
+  handleStrike,
+  handleUseItem,
+   grantTreasureReward,
+  depleteTileResource,
+  pushEvent,
+  showDamageFlash,
+  deckSize,
   } = useGameState(mapBiome);
+
+  const recipesById = useMemo(() => {
+    const lookup = new Map<string, (typeof recipes)[number]>();
+    for (const recipe of recipes) {
+      lookup.set(recipe.id, recipe);
+    }
+    return lookup;
+  }, [recipes]);
 
   const { saveRecord } = useScoreRecord();
   const savedRef = useRef(false);
   const [showLeaderboardPopup, setShowLeaderboardPopup] = useState(false);
+  const [showGameOverLog, setShowGameOverLog] = useState(false);
   const {
     records: leaderboardRecords,
     loading: leaderboardLoading,
     refresh: refreshLeaderboard,
     invalidate: invalidateLeaderboard,
   } = useLeaderboard(10, 'collection');
+  const isTreasureTile = position.x === TREASURE_TILE.x && position.y === TREASURE_TILE.y;
+  const [pendingTreasureRewardCard, setPendingTreasureRewardCard] = useState<ActionCard | null>(null);
+  const [showTreasureRewardModal, setShowTreasureRewardModal] = useState(false);
+  const [hasClaimedTreasureReward, setHasClaimedTreasureReward] = useState(false);
 
   const finalScore = useMemo(() => {
     if (!isPlayerDead) return 0;
@@ -272,7 +290,16 @@ function CollectionGame({
 
   function onCardClick(card: ActionCard) {
     if (isPlayerDead) return;
-    if (isForageCard(card.type) && !canCollectFromCurrentTile) return;
+    if (isForageCard(card.type)) {
+      if (isTreasureTile && !hasClaimedTreasureReward && !showTreasureRewardModal && !pendingTreasureRewardCard) {
+        depleteTileResource(position.x, position.y);
+        setHasClaimedTreasureReward(true);
+        setPendingTreasureRewardCard(card);
+        setShowTreasureRewardModal(true);
+        return;
+      }
+      if (!canCollectFromCurrentTile) return;
+    }
     if (card.type === 'explore' || card.type === 'sprint') {
       // Toggle selection — requires a map tile target
       selectCard(card);
@@ -281,6 +308,18 @@ function CollectionGame({
       handlePlayCard(card);
     }
   }
+
+  const handleTreasureRewardChoice = useCallback(
+    (rewardType: 'xp' | 'weapon' | 'gold_chunk') => {
+      if (!pendingTreasureRewardCard || isPlayerDead) return;
+      grantTreasureReward(rewardType);
+      setHasClaimedTreasureReward(true);
+      setShowTreasureRewardModal(false);
+      handlePlayCard(pendingTreasureRewardCard, undefined, { skipTreasureCollect: true });
+      setPendingTreasureRewardCard(null);
+    },
+    [grantTreasureReward, handlePlayCard, isPlayerDead, pendingTreasureRewardCard],
+  );
 
   function onTileClick(x: number, y: number) {
     if (isPlayerDead) return;
@@ -336,13 +375,28 @@ function CollectionGame({
     }
 
     const previousInventory = prevInventoryRef.current;
-    const gainedConsumableItems = Array.from(currentInventory.entries())
-      .filter(([itemId, qty]) => qty > (previousInventory.get(itemId) ?? 0) && isConsumableBeltItem(itemId));
+    const gainedItems = Array.from(currentInventory.entries())
+      .filter(([itemId, qty]) => qty > (previousInventory.get(itemId) ?? 0));
+    const gainedWeaponItems = gainedItems.filter(([itemId]) => {
+      const item = getItemById(itemId);
+      return item?.category === 'weapon';
+    });
+    const gainedConsumableItems = gainedItems.filter(([itemId]) => isConsumableBeltItem(itemId));
 
-    if (gainedConsumableItems.length > 0) {
+    if (gainedWeaponItems.length > 0 || gainedConsumableItems.length > 0) {
       setBeltSlots((prev) => {
         let next = [...prev];
         let updated = false;
+
+        if (gainedWeaponItems.length > 0) {
+          const currentWeaponItemId = next[WEAPON_BELT_SLOT_INDEX];
+          const currentWeaponItem = currentWeaponItemId ? getItemById(currentWeaponItemId) : null;
+          if (!currentWeaponItem || currentWeaponItem.category !== 'weapon') {
+            next[WEAPON_BELT_SLOT_INDEX] = gainedWeaponItems[0][0];
+            updated = true;
+          }
+        }
+
         for (const [itemId] of gainedConsumableItems) {
           const alreadyAssigned = next.some((assignedItemId, slotIndex) => slotIndex !== WEAPON_BELT_SLOT_INDEX && assignedItemId === itemId);
           if (alreadyAssigned) continue;
@@ -409,6 +463,30 @@ function CollectionGame({
     });
   }, [canAssignSlot]);
 
+  const handleCraftWithAutoEquip = useCallback(
+    (recipeId: string): string => {
+      const resultMessage: string = handleCraft(recipeId) ?? 'Failed to craft.';
+      if (!resultMessage.startsWith('✨ Crafted:')) return resultMessage;
+
+      const recipe = recipesById.get(recipeId);
+      if (!recipe) return resultMessage;
+
+      const craftedItem = getItemById(recipe.result.itemId);
+      if (!craftedItem || craftedItem.category !== 'weapon') return resultMessage;
+
+      setBeltSlots((prev) => {
+        const next = [...prev];
+        const currentWeapon = next[WEAPON_BELT_SLOT_INDEX] ? getItemById(next[WEAPON_BELT_SLOT_INDEX]) : null;
+        if (currentWeapon?.category === 'weapon') return prev;
+        next[WEAPON_BELT_SLOT_INDEX] = craftedItem.id;
+        return next;
+      });
+
+      return resultMessage;
+    },
+    [handleCraft, recipesById],
+  );
+
   const handleClearBeltSlot = useCallback((slotIndex: number) => {
     setBeltSlots((prev) => {
       if (slotIndex < 0 || slotIndex >= prev.length) return prev;
@@ -432,10 +510,70 @@ function CollectionGame({
     handleUseItem(itemId);
   }
 
-  const eventLog = useMemo(() => [...events].reverse().slice(0, 8), [events]);
+  const eventLog = useMemo(() => [...events].reverse(), [events]);
+  const compressedEventLog = useMemo(() => {
+    const rows: Array<{
+      type: 'success' | 'info' | 'warning';
+      message: string;
+      count: number;
+      turn?: number;
+    }> = [];
+    for (const ev of eventLog) {
+      const last = rows[rows.length - 1];
+      if (
+        last &&
+        last.type === ev.type &&
+        last.message === ev.message &&
+        last.turn !== undefined &&
+        ev.turn !== undefined &&
+        last.turn === ev.turn
+      ) {
+        last.count += 1;
+      } else {
+        rows.push({ type: ev.type, message: ev.message, count: 1, turn: ev.turn });
+      }
+    }
+    return rows;
+  }, [eventLog]);
+  const eventLogRef = useRef<HTMLDivElement | null>(null);
+  const gameOverLogRef = useRef<HTMLDivElement | null>(null);
+  const getEventTypeClass = useCallback((type: 'success' | 'info' | 'warning') => {
+    return type === 'success'
+      ? 'text-emerald-300 border-emerald-400/50'
+      : type === 'warning'
+        ? 'text-amber-200 border-amber-400/50'
+        : 'text-gp-mint border-gp-mint/50';
+  }, []);
+  const renderEventLine = useCallback((ev: { type: 'success' | 'info' | 'warning'; message: string; count: number }) => {
+    const isRestoreLog = ev.message.startsWith('🔄 Resources replenished after');
+    const label = isRestoreLog ? '[RESTORE]' : ev.type.toUpperCase();
+
+    return (
+      <>
+        <span
+          className={`mr-2 shrink-0 w-16 text-center px-2 py-0.5 rounded-md border text-[10px] ${getEventTypeClass(ev.type)}`}
+        >
+          {label}
+        </span>
+        <span>
+          {ev.message}
+          {ev.count > 1 ? ` x${ev.count}` : ''}
+        </span>
+      </>
+    );
+  }, [getEventTypeClass]);
   const getLabeledAnimalDisplayName = useCallback((animalName: string) => {
     return `${BIOME_PRESET_LABEL[mapBiome]} ${animalName}`;
   }, [mapBiome]);
+
+  useEffect(() => {
+    if (eventLogRef.current) {
+      eventLogRef.current.scrollTop = 0;
+    }
+    if (gameOverLogRef.current) {
+      gameOverLogRef.current.scrollTop = 0;
+    }
+  }, [compressedEventLog]);
 
   useEffect(() => {
     return () => {
@@ -464,6 +602,26 @@ function CollectionGame({
       return next;
     });
   }, [inventory, WEAPON_BELT_SLOT_INDEX]);
+
+  useEffect(() => {
+    if (!isPlayerDead) {
+      setShowGameOverLog(false);
+    }
+  }, [isPlayerDead]);
+
+  useEffect(() => {
+    if (!isTreasureTile) {
+      setShowTreasureRewardModal(false);
+      setPendingTreasureRewardCard(null);
+    }
+  }, [isTreasureTile]);
+
+  useEffect(() => {
+    if (isPlayerDead) {
+      setShowTreasureRewardModal(false);
+      setPendingTreasureRewardCard(null);
+    }
+  }, [isPlayerDead]);
 
   useEffect(() => {
     const handleQuickUseKeydown = (event: KeyboardEvent) => {
@@ -507,6 +665,7 @@ function CollectionGame({
         <MapPanel
           position={position}
           selectedCard={selectedCard}
+          isTreasureRewardClaimed={hasClaimedTreasureReward}
           mapGrid={mapGrid}
           showPlayerMoveHint={moveCardFlash}
           onTileClick={onTileClick}
@@ -565,12 +724,13 @@ function CollectionGame({
                   <span className='text-2xl leading-none text-center'>
                     {item.emoji}
                   </span>
-                  <div className="absolute bottom-1 right-1 text-sm">
+                  <div className="absolute bottom-1 right-1 text-xs text-right flex flex-col items-end gap-0.5">
                     {typeof weaponAttackPower === 'number' ? (
-                      <span className="text-xs text-emerald-300 font-bold">+{weaponAttackPower}</span>
-                    ) : (
-                      <span className="text-xs text-gp-mint font-semibold">×{slot.quantity}</span>
-                    )}
+                      <span className="text-emerald-300 font-bold">+{weaponAttackPower}</span>
+                    ) : null}
+                    {!item.category || item.category !== 'weapon' ? (
+                      <span className="text-gp-mint font-semibold">×{slot.quantity}</span>
+                    ) : null}
                   </div>
                 </button>
               );
@@ -659,10 +819,10 @@ function CollectionGame({
               No events yet. Play a card to start!
             </p>
           ) : (
-            <div className="space-y-1.5 overflow-y-auto max-h-56">
-              {eventLog.map((ev) => (
+            <div ref={eventLogRef} className="space-y-1.5 overflow-y-auto max-h-56">
+              {compressedEventLog.map((ev, index) => (
                 <div
-                  key={`${ev.id}-${ev.timestamp}`}
+                  key={`game-log-${index}-${ev.type}-${ev.message}`}
                   className={`text-sm px-3 py-1.5 rounded-lg ${
                     ev.type === 'success'
                       ? 'bg-gp-accent/20 text-gp-mint'
@@ -671,7 +831,9 @@ function CollectionGame({
                       : 'bg-gp-bg/40 text-gp-mint'
                   }`}
                 >
-                  {ev.message}
+                  <div className="flex items-center gap-2">
+                    {renderEventLine(ev)}
+                  </div>
                 </div>
               ))}
             </div>
@@ -683,6 +845,49 @@ function CollectionGame({
 
   return (
     <div className="min-h-screen bg-gp-bg flex flex-col">
+      {showDamageFlash ? <div className="pointer-events-none fixed inset-0 z-50 gp-damage-flash-overlay" /> : null}
+      {showTreasureRewardModal && pendingTreasureRewardCard ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4">
+          <div className="w-full max-w-md rounded-xl border border-gp-accent/40 bg-gp-surface p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-gp-mint">🏴‍☠️ Treasure Reward</h3>
+            <p className="text-xs text-gp-mint/80">Choose one reward from this treasure chest.</p>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleTreasureRewardChoice('xp')}
+              >
+                ✨ +XP
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleTreasureRewardChoice('weapon')}
+              >
+                🗡️ Weapon
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleTreasureRewardChoice('gold_chunk')}
+              >
+                ⚜️ Gold
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowTreasureRewardModal(false);
+                setPendingTreasureRewardCard(null);
+              }}
+              className="w-full"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {/* ── Compact header with conditions ─────────────────────────────────── */}
       <header className="bg-gp-surface border-b border-gp-accent/30 px-4 py-2.5 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto flex items-center gap-3 flex-wrap">
@@ -818,12 +1023,20 @@ function CollectionGame({
                           </div>
                         </div>
                       )}
-                      <p className="text-gp-mint/50 text-xs">
+                    <p className="text-gp-mint/50 text-xs">
                         {user ? 'Score saved to the leaderboard.' : 'Score saved as Guest.'}
                       </p>
-                      <Button variant="primary" size="sm" onClick={onRestart} className="w-full">
+                    <Button variant="primary" size="sm" onClick={onRestart} className="w-full">
                         🔄 Restart
                       </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowGameOverLog((prev) => !prev)}
+                      className="w-full"
+                    >
+                      {showGameOverLog ? '🙈 Hide Log' : '📜 View Log'}
+                    </Button>
                     <Button variant="secondary" size="sm" onClick={() => setShowLeaderboardPopup(true)} className="w-full">
                       View Leaderboard
                     </Button>
@@ -850,6 +1063,39 @@ function CollectionGame({
                       );
                     }}
                   />
+                  {showGameOverLog && (
+                    <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-10 pointer-events-none">
+                      <div className="w-full max-w-xl pointer-events-auto rounded-xl border border-gp-accent/40 bg-zinc-900/95 p-4 shadow-2xl">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <h3 className="text-sm font-semibold text-gp-mint">📜 Game Log</h3>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowGameOverLog(false)}
+                            className="h-7 w-7 px-0 text-gp-mint"
+                          >
+                            ✕
+                          </Button>
+                        </div>
+                        <div ref={gameOverLogRef} className="max-h-56 space-y-1 overflow-y-auto">
+                          {compressedEventLog.length === 0 ? (
+                            <p className="text-sm text-gp-mint/70">No events yet.</p>
+                          ) : (
+                            compressedEventLog.map((ev, index) => (
+                              <div
+                                key={`game-over-log-${index}-${ev.type}-${ev.message}`}
+                                className="text-xs rounded-md px-2 py-1 bg-gp-bg/50 text-gp-mint/90"
+                              >
+                                <div className="flex items-start gap-2">
+                                  {renderEventLine(ev)}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   </div>
                 )}
                 <div
@@ -873,7 +1119,7 @@ function CollectionGame({
                     />
                   </section>
                   <section className="w-full shrink-0">
-                    <CraftingPanel recipes={recipes} canCraft={canCraft} onCraft={handleCraft} getQuantity={getQuantity} />
+                    <CraftingPanel recipes={recipes} canCraft={canCraft} onCraft={handleCraftWithAutoEquip} getQuantity={getQuantity} />
                   </section>
                   <section className="w-full shrink-0">
                     <DiscoveryPanel discovered={discovered} />
@@ -884,6 +1130,7 @@ function CollectionGame({
                       biomeType={currentBiomeInfo.type}
                       scoutPoints={scoutPoints}
                       scoutRevealLevel={scoutRevealLevel}
+                      onUnlockSpawnLayer={unlockSpawnLayer}
                       selectedSpawnLayer={selectedSpawnLayer}
                       onSelectSpawnLayer={setSelectedSpawnLayer}
                     />

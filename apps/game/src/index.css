@@ -47,3 +47,17 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--gp-mint), 0.8) rgba(var(--gp-bg), 0.45);
 }
+
+@keyframes gp-damage-flash {
+  0% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.gp-damage-flash-overlay {
+  background: radial-gradient(circle at center, rgba(239, 68, 68, 0.42), rgba(239, 68, 68, 0.3));
+  animation: gp-damage-flash 0.45s ease-out;
+}

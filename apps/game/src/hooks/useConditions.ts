@@ -72,9 +72,14 @@ export function useConditions() {
     setConditions((prev) => {
       const options = WEATHER_BY_SEASON[prev.season];
       if (!options || options.length === 0) return prev;
-      const others = options.filter((w) => w !== prev.weather);
-      const pool = others.length > 0 ? others : options;
-      const next = pool[Math.floor(Math.random() * pool.length)]!;
+      const uniqueOptions = Array.from(new Set(options));
+      let next = prev.weather;
+
+      if (uniqueOptions.length <= 1) return prev;
+      while (next === prev.weather) {
+        next = uniqueOptions[Math.floor(Math.random() * uniqueOptions.length)];
+      }
+
       msg = `Weather shifted to ${next}!`;
       return { ...prev, weather: next };
     });

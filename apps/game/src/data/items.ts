@@ -37,6 +37,17 @@ export const ITEMS: Item[] = [
     spawnConditions: { seasons: [] }, // crafted-only
   },
   {
+    id: 'iron_knife',
+    name: 'Iron Knife',
+    emoji: '🗡️',
+    description: 'A forged iron knife with a sharper edge for cleaner kills.',
+    rarity: 4,
+    category: 'weapon',
+    tags: ['weapon', 'melee'],
+    attackPower: 5,
+    spawnConditions: { seasons: [] }, // reward-only
+  },
+  {
     id: 'stone_blade',
     name: 'Stone Blade',
     emoji: '🗡️',
@@ -70,6 +81,7 @@ export const ITEMS: Item[] = [
     rarity: 2,
     category: 'creature',
     tags: ['food', 'cooking'],
+    healingAmount: 3,
     spawnConditions: { seasons: [] }, // crafted-only
   },
   {
@@ -90,6 +102,17 @@ export const ITEMS: Item[] = [
     rarity: 2,
     category: 'creature',
     tags: ['food', 'cooking'],
+    healingAmount: 5,
+    spawnConditions: { seasons: [] },
+  },
+  {
+    id: 'gold_chunk',
+    name: 'Gold ⚜️',
+    emoji: '⚜️',
+    description: 'A ceremonial gold charm from the treasure chest.',
+    rarity: 2,
+    category: 'mineral',
+    tags: ['loot'],
     spawnConditions: { seasons: [] },
   },
   {
@@ -100,6 +123,7 @@ export const ITEMS: Item[] = [
     rarity: 3,
     category: 'crafted',
     tags: ['potion'],
+    healingAmount: 8,
     spawnConditions: { seasons: [] },
   },
   // ── Flora ──────────────────────────────────────────────────────────────────
@@ -139,6 +163,7 @@ export const ITEMS: Item[] = [
     rarity: 1,
     category: 'flora',
     tags: ['mushroom', 'food'],
+    healingAmount: 2,
     spawnConditions: {
       seasons: ['Autumn'],
       weathers: ['Rainy', 'Foggy'],
@@ -191,6 +216,7 @@ export const ITEMS: Item[] = [
     rarity: 1,
     category: 'flora',
     tags: ['berry', 'food'],
+    healingAmount: 1,
     spawnConditions: {
       seasons: ['Summer', 'Spring'],
       weathers: ['Sunny'],
@@ -205,6 +231,7 @@ export const ITEMS: Item[] = [
     rarity: 2,
     category: 'flora',
     tags: ['berry', 'food'],
+    healingAmount: 1,
     spawnConditions: {
       seasons: ['Winter'],
       weathers: ['Snowy', 'Cloudy'],

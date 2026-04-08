@@ -178,6 +178,12 @@ export function useMap(startBiomePreset: MapBiomePreset = 'meadow') {
     []
   );
 
+  const depleteTileResource = useCallback((x: number, y: number) => {
+    const key = tileKey(x, y);
+    tileResourcesRef.current = { ...tileResourcesRef.current, [key]: 0 };
+    setTileResourcesVersion((v) => v + 1);
+  }, []);
+
   /** Returns the current resources remaining on tile (x, y). */
   const getTileResources = useCallback(
     (x: number, y: number): number => tileResourcesRef.current[tileKey(x, y)] ?? 0,
@@ -223,6 +229,7 @@ export function useMap(startBiomePreset: MapBiomePreset = 'meadow') {
     isAdjacent,
     moveTo,
     consumeTileResource,
+    depleteTileResource,
     getTileResources,
     replenishTileResources,
     getReachableTiles,

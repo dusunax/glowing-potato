@@ -1,9 +1,9 @@
 // Static animal definitions and initial placement.
 // No logic — pure data only.
 
-import type { BiomeType, MapBiomePreset } from '../types/map';
+import type { BiomeType, MapBiomePreset, PlayerPosition } from '../types/map';
 import type { AnimalTemplate, WildAnimal } from '../types/animal';
-import { MAP_GRID, MAP_COLS, MAP_ROWS } from './map';
+import { MAP_GRID, MAP_COLS, MAP_ROWS, getMazeNeighbors } from './map';
 
 const ANIMAL_TEMPLATES = {
   wolf: { name: 'Wolf',      emoji: '🐺', behavior: 'hostile', maxHp: 4, attack: 3, rarity: 2, experienceReward: 4 },
@@ -20,8 +20,8 @@ const ANIMAL_TEMPLATES = {
     name: 'Blood Skeleton',
     emoji: '🩸',
     behavior: 'hostile',
-    maxHp: 14,
-    attack: 8,
+    maxHp: 16,
+    attack: 12,
     rarity: 5,
     experienceReward: 24,
   },
@@ -115,15 +115,45 @@ function pickSpawnPositions(
   caveTiles: Array<{ x: number; y: number }> = CAVE_TILES,
   count: number,
   occupied: Set<string> = new Set(),
+  playerPosition?: PlayerPosition,
 ): SpawnedPosition[] {
-  const available = shuffleInPlace(
-    caveTiles.length > 0 ? [...caveTiles] : [...CAVE_TILES],
-  ).filter((tile) => !occupied.has(tileKey(tile.x, tile.y)));
+  const source = caveTiles.length > 0 ? [...caveTiles] : [...CAVE_TILES];
+  const caveSet = new Set(source.map((tile) => tileKey(tile.x, tile.y)));
+  const playerTile = playerPosition ? tileKey(playerPosition.x, playerPosition.y) : null;
+
+  const available = shuffleInPlace(source).filter((tile) => {
+    const key = tileKey(tile.x, tile.y);
+    if (occupied.has(key)) return false;
+    if (playerTile && caveSet.has(playerTile) && key === playerTile) return false;
+    return true;
+  });
 
   if (available.length === 0 || count <= 0) return [];
 
-  const safeCount = Math.min(count, available.length);
-  return available.slice(0, safeCount);
+  if (!playerTile || !playerPosition || !caveSet.has(playerTile)) {
+    const safeCount = Math.min(count, available.length);
+    return available.slice(0, safeCount);
+  }
+
+  const adjacentNeighbors = new Set(
+    getMazeNeighbors(playerPosition.x, playerPosition.y)
+      .filter((tile) => caveSet.has(tileKey(tile.x, tile.y)))
+      .map((tile) => tileKey(tile.x, tile.y)),
+  );
+  const adjacent = shuffleInPlace(available.filter((tile) => adjacentNeighbors.has(tileKey(tile.x, tile.y))));
+  const selected = [...adjacent.slice(0, Math.min(count, adjacent.length))];
+  const used = new Set(selected.map((tile) => tileKey(tile.x, tile.y)));
+
+  for (const tile of available) {
+    if (selected.length >= count) break;
+    const key = tileKey(tile.x, tile.y);
+    if (used.has(key)) continue;
+    selected.push(tile);
+    used.add(key);
+  }
+
+  const safeCount = Math.min(count, selected.length);
+  return selected.slice(0, safeCount);
 }
 
 function scaleTemplateForBiome(template: AnimalTemplate, biomePreset: MapBiomePreset): AnimalTemplate {
@@ -202,10 +232,11 @@ function spawnWave(
   occupied: PositionSetLike = [],
   forcedTemplate?: AnimalTemplate,
   forcedCount?: number,
+  playerPosition?: PlayerPosition,
 ): WildAnimal[] {
   const count = forcedCount == null ? (Math.random() < 0.5 ? 1 : 2) : Math.max(0, Math.floor(forcedCount));
   const occupiedSet = toPositionSet(occupied);
-  const positions = pickSpawnPositions(caveTiles, count, occupiedSet);
+  const positions = pickSpawnPositions(caveTiles, count, occupiedSet, playerPosition);
   return positions.map((position) => {
     const pool = BIOME_ANIMAL_POOLS[biomePreset] ?? BIOME_ANIMAL_POOLS.meadow;
     const template = forcedTemplate ?? createTemplateFromPool(pool, biomePreset);
@@ -236,8 +267,9 @@ export function spawnNewWave(
   occupied: PositionSetLike = [],
   forcedTemplate?: AnimalTemplate,
   forcedCount?: number,
+  playerPosition?: PlayerPosition,
 ): WildAnimal[] {
-  return spawnWave(caveTiles, biomePreset, occupied, forcedTemplate, forcedCount);
+  return spawnWave(caveTiles, biomePreset, occupied, forcedTemplate, forcedCount, playerPosition);
 }
 
 export {

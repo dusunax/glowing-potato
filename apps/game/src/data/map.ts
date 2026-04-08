@@ -10,29 +10,30 @@ import type { PlayerPosition } from '../types/map';
  *   col: 0         1          2        3        4        5        6        7
  * row 0: mountain  mountain   forest   forest   forest   meadow   meadow   beach
  * row 1: mountain  lake       forest   forest   meadow   meadow   plains   beach
- * row 2: village   lake       meadow   meadow   plains   swamp    swamp    plains
+ * row 2: meadow    lake       meadow   meadow   plains   swamp    swamp    plains
  * row 3: plains    forest     forest   swamp    swamp    swamp    cave     plains
  * row 4: plains    plains     meadow   plains    beach    beach    plains   plains
  * row 5: forest    plains     plains   meadow   meadow   cave     mountain mountain
  * row 6: forest    forest     meadow   lake     lake     plains   plains   cave
- * row 7: beach     beach      plains   swamp    mountain cave     cave     cave
+ * row 7: beach     beach      plains   swamp    mountain cave     cave     treasure
  */
 // prettier-ignore
 export const MAP_GRID: BiomeType[][] = [
   ['mountain', 'mountain', 'forest',  'forest',  'forest',  'meadow',  'meadow',  'beach'],
   ['mountain', 'lake',     'forest',  'forest',  'meadow',  'meadow',  'plains',  'beach'],
-  ['village',  'lake',     'meadow',  'meadow',  'plains',  'swamp',   'swamp',   'plains'],
+  ['meadow',   'lake',     'meadow',  'meadow',  'plains',  'swamp',   'swamp',   'plains'],
   ['plains',   'forest',   'forest',  'swamp',   'swamp',   'swamp',   'cave',    'plains'],
   ['plains',   'plains',   'meadow',  'plains',  'beach',   'beach',   'plains',  'plains'],
   ['forest',   'plains',   'plains',  'meadow',  'meadow',  'cave',    'mountain', 'mountain'],
   ['forest',   'forest',   'meadow',  'lake',    'lake',    'plains',  'plains',  'cave'],
-  ['beach',    'beach',    'plains',  'swamp',   'mountain','cave',    'cave',    'cave'],
+  ['beach',    'beach',    'plains',  'swamp',   'mountain', 'cave',   'cave',    'treasure'],
 ];
 
 export const MAP_ROWS = MAP_GRID.length;
 export const MAP_COLS = MAP_GRID[0].length;
 
 export const INITIAL_PLAYER_POSITION: PlayerPosition = { x: 0, y: 0 }; // House moved to top-left
+export const TREASURE_TILE = { x: 7, y: 7 };
 
 const PRESET_BIOME_VARIANTS: Record<MapBiomePreset, BiomeType[]> = {
   meadow: ['meadow', 'plains', 'forest', 'swamp'],
@@ -62,9 +63,18 @@ export function createRandomizedMapGrid(
 
   for (let y = 0; y < next.length; y += 1) {
     for (let x = 0; x < next[y]!.length; x += 1) {
+      if (x === TREASURE_TILE.x && y === TREASURE_TILE.y) {
+        next[y]![x] = 'treasure';
+        continue;
+      }
+
       if (next[y]![x] === 'cave') continue;
       if (x === INITIAL_PLAYER_POSITION.x && y === INITIAL_PLAYER_POSITION.y) {
         next[y]![x] = 'village';
+        continue;
+      }
+      if (next[y]![x] === 'village') {
+        next[y]![x] = pickRandomBiomeByPreset(presetBiome);
         continue;
       }
 
@@ -176,6 +186,13 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
     description: 'Dark caverns hiding rare minerals and special finds.',
     categoryBonus: ['mineral', 'special'],
     rarityBonus: [3, 4],
+  },
+  treasure: {
+    type: 'treasure',
+    emoji: '📦',
+    name: 'Treasure Chest',
+    description: 'A hidden chest at the edge of the map, keep an eye on this tile.',
+    categoryBonus: [],
   },
   village: {
     type: 'village',

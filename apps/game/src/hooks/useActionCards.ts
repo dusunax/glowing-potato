@@ -27,6 +27,7 @@ interface UseActionCardsOptions {
   currentDay: number;
   hasUsedSummonMonster: boolean;
   onSummonMonsterUsed?: () => void;
+  onDeckRefill?: (deckType: 'move' | 'forage' | 'skill') => void;
 }
 
 interface CardState {
@@ -67,14 +68,26 @@ export interface PlayCardOptions {
   preserveCard?: boolean;
 }
 
+type DeckType = 'move' | 'forage' | 'skill';
+
 function drawOne(
   deck: ActionCard[],
-  discard: ActionCard[]
+  discard: ActionCard[],
+  deckType: DeckType,
+  onDeckRefill?: (deckType: DeckType) => void,
+  rebuildDeck?: () => ActionCard[],
 ): [ActionCard | null, ActionCard[], ActionCard[]] {
   if (deck.length > 0) return [deck[0]!, deck.slice(1), discard];
   if (discard.length > 0) {
     const reshuffled = shuffleDeck(discard);
     return [reshuffled[0]!, reshuffled.slice(1), []];
+  }
+  if (rebuildDeck) {
+    const replenished = shuffleDeck(rebuildDeck());
+    if (replenished.length > 0) {
+      if (onDeckRefill) onDeckRefill(deckType);
+      return [replenished[0]!, replenished.slice(1), []];
+    }
   }
   return [null, deck, discard];
 }
@@ -104,10 +117,36 @@ function buildInitialState(currentDay: number, hasUsedSummonMonster: boolean): C
   };
 }
 
+function buildMoveDeck(): ActionCard[] {
+  const full = buildDeck();
+  return shuffleDeck(full.filter(isMoveCard));
+}
+
+function buildForageDeck(): ActionCard[] {
+  const full = buildDeck();
+  return shuffleDeck(full.filter(isForageCard));
+}
+
+function buildSkillDeck(
+  currentDay: number,
+  hasUsedSummonMonster: boolean,
+  forceIncludeSummon = false,
+): ActionCard[] {
+  const full = buildDeck();
+  const summonEnabled = currentDay >= SUMMON_MONSTER_UNLOCK_DAY && !hasUsedSummonMonster;
+  const baseDeck = full.filter(
+    (c) => !isMoveCard(c) && !isForageCard(c) && (!isSummonMonsterCard(c) || summonEnabled),
+  );
+  const withSummon = summonEnabled && forceIncludeSummon && !baseDeck.some(isSummonMonsterCard);
+  const finalDeck = withSummon ? [...baseDeck, createSummonMonsterCard()] : baseDeck;
+  return shuffleDeck(finalDeck);
+}
+
 export function useActionCards({
   currentDay,
   hasUsedSummonMonster,
   onSummonMonsterUsed,
+  onDeckRefill,
 }: UseActionCardsOptions) {
   const [cardState, setCardState] = useState<CardState>(() =>
     buildInitialState(currentDay, hasUsedSummonMonster)
@@ -151,19 +190,20 @@ export function useActionCards({
 
       if (cardIndex === 0) {
         moveDiscard = [...moveDiscard, card];
-        [drawn, moveDeck, moveDiscard] = drawOne(moveDeck, moveDiscard);
+        [drawn, moveDeck, moveDiscard] = drawOne(moveDeck, moveDiscard, 'move', onDeckRefill, () => buildMoveDeck());
       } else if (cardIndex === 1) {
         forageDiscard = [...forageDiscard, card];
-        [drawn, forageDeck, forageDiscard] = drawOne(forageDeck, forageDiscard);
+        [drawn, forageDeck, forageDiscard] = drawOne(forageDeck, forageDiscard, 'forage', onDeckRefill, () => buildForageDeck());
       } else {
         const shouldRemoveSummonCard = isSummonMonsterCard(card);
+        const usedSummon = shouldRemoveSummonCard || hasUsedSummonMonster;
         if (shouldRemoveSummonCard) {
           if (onSummonMonsterUsed) {
             onSummonMonsterUsed();
           }
           skillDeck = skillDeck.filter((c) => !isSummonMonsterCard(c));
           skillDiscard = skillDiscard.filter((c) => !isSummonMonsterCard(c));
-          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard);
+          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard, 'skill', onDeckRefill, () => buildSkillDeck(currentDay, usedSummon, true));
         } else if (hasUsedSummonMonster) {
           const stateWithoutSummon = stripSummonCardsFromState({
             ...prev,
@@ -176,24 +216,36 @@ export function useActionCards({
           });
           skillDeck = stateWithoutSummon.skillDeck;
           skillDiscard = [...stateWithoutSummon.skillDiscard];
-          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard);
+          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard, 'skill', onDeckRefill, () => buildSkillDeck(currentDay, true, true));
         } else {
           skillDiscard = [...skillDiscard, card];
-          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard);
+          [drawn, skillDeck, skillDiscard] = drawOne(skillDeck, skillDiscard, 'skill', onDeckRefill, () => buildSkillDeck(currentDay, usedSummon, true));
         }
       }
 
       const newHand = [...prev.hand];
+      if (drawn === null && cardIndex >= 2) {
+        const skillFallback = buildSkillDeck(currentDay, hasUsedSummonMonster, true);
+        if (skillFallback.length > 0) {
+          drawn = skillFallback[0]!;
+        }
+      }
+
       if (drawn) {
         newHand[cardIndex] = drawn;
       } else {
-        newHand.splice(cardIndex, 1);
+        if (cardIndex >= 2) {
+          const skillFallback = buildSkillDeck(currentDay, hasUsedSummonMonster, true);
+          newHand[cardIndex] = skillFallback[0] ?? card;
+        } else {
+          newHand.splice(cardIndex, 1);
+        }
       }
 
       return { hand: newHand, moveDeck, moveDiscard, forageDeck, forageDiscard, skillDeck, skillDiscard };
     });
     setSelectedCard(null);
-  }, [hasUsedSummonMonster, onSummonMonsterUsed]);
+  }, [currentDay, hasUsedSummonMonster, onDeckRefill, onSummonMonsterUsed]);
 
   const selectCard = useCallback((card: ActionCard | null) => {
     setSelectedCard((prev) => (prev?.id === card?.id ? null : card));

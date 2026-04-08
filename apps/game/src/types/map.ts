@@ -10,6 +10,7 @@ export type BiomeType =
   | 'plains'
   | 'cave'
   | 'village'
+  | 'treasure'
   | 'swamp'
   | 'beach'
   | 'desert'

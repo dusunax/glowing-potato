@@ -14,6 +14,7 @@ interface MapPanelProps {
   onTileClick: (x: number, y: number) => void;
   mapGrid: BiomeType[][];
   currentBiomeInfo: BiomeInfo;
+  isTreasureRewardClaimed?: boolean;
   canMoveTo: (x: number, y: number, range?: number) => boolean;
   visitedTiles: Set<string>;
   knownTiles: Set<string>;
@@ -30,6 +31,7 @@ export function MapPanel({
   onTileClick,
   mapGrid,
   currentBiomeInfo,
+  isTreasureRewardClaimed = false,
   visitedTiles,
   knownTiles,
   getTileResources,
@@ -68,6 +70,9 @@ export function MapPanel({
             const animals = getAnimalsAt(x, y);
             const isReachable = reachable.has(key) && animals.length === 0;
             const biomeInfo = BIOME_INFO[biome];
+            const isTreasureTile = biome === 'treasure';
+            const tileEmoji = isTreasureTile && isTreasureRewardClaimed ? '🪙' : biomeInfo.emoji;
+            const tileName = isTreasureTile && isTreasureRewardClaimed ? 'Treasure Opened' : biomeInfo.name;
             const resources = getTileResources(x, y);
             const depleted = resources === 0;
             const isNearbyAnimal = nearbyAnimalTiles.has(key);
@@ -115,8 +120,8 @@ export function MapPanel({
                   onClick={() => clickable ? onTileClick(x, y) : undefined}
                   disabled={!clickable}
                   className={tileClass}
-                  title={hidden ? '???' : biomeInfo.name}
-                  aria-label={hidden ? 'Unknown tile' : `${biomeInfo.name}${isPlayer ? ' (you are here)' : ''}`}
+                  title={hidden ? '???' : tileName}
+                  aria-label={hidden ? 'Unknown tile' : `${tileName}${isPlayer ? ' (you are here)' : ''}`}
                 >
                   {hidden ? (
                     <>
@@ -128,7 +133,7 @@ export function MapPanel({
                   ) : (
                     <>
                       {/* Biome emoji */}
-                      <span className={isKnown && !isVisited ? 'opacity-50' : ''}>{biomeInfo.emoji}</span>
+                      <span className={isKnown && !isVisited ? 'opacity-50' : ''}>{tileEmoji}</span>
 
                       {/* Player marker */}
                       {isPlayer && <span className="text-[9px] leading-none">🧑</span>}

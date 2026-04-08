@@ -28,4 +28,6 @@ export interface Item {
   spawnConditions: SpawnConditions;
   /** Extra damage used when this item is equipped as a weapon. */
   attackPower?: number;
+  /** Health restored when consumed as food or potion. */
+  healingAmount?: number;
 }

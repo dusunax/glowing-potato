@@ -117,9 +117,6 @@ export function InventoryPanel({
                       Clear Selected
                     </button>
                     )}
-                  {!isBeltItem && (
-                    <span className="text-xs text-gp-mint/50">✕</span>
-                  )}
                 </div>
               </div>
             );

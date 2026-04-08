@@ -6,7 +6,6 @@ import { Badge, CardTitle } from '@glowing-potato/ui';
 import {
   getSpawnableItems,
   getBaseSpawnableItems,
-  getMaxUnlockedSpawnLayer,
   MAX_SPAWN_REVEAL_LEVEL,
   SPAWN_LAYER_UNLOCK_COST_BY_LEVEL,
 } from '../../utils/spawning';
@@ -19,6 +18,7 @@ interface SpawnPanelProps {
   scoutPoints: number;
   scoutRevealLevel: number;
   selectedSpawnLayer: number;
+  onUnlockSpawnLayer: (layer: number) => void;
   onSelectSpawnLayer: (layer: number) => void;
 }
 
@@ -59,13 +59,14 @@ export function SpawnPanel({
   biomeType,
   scoutPoints,
   scoutRevealLevel,
+  onUnlockSpawnLayer,
   selectedSpawnLayer,
   onSelectSpawnLayer,
 }: SpawnPanelProps) {
   const revealLevel = Math.min(Math.max(1, scoutRevealLevel), MAX_SPAWN_REVEAL_LEVEL);
   const baseSpawnable = getBaseSpawnableItems(ITEMS);
   const spawnable = [...baseSpawnable, ...getSpawnableItems(ITEMS, conditions, revealLevel, biomeType)];
-  const unlockedLayer = getMaxUnlockedSpawnLayer(scoutPoints);
+  const unlockedLayer = revealLevel;
   const activeScoutLevel = Math.max(0, scoutPoints);
   const baseNode: SpawnTreeNode = {
     level: 0,
@@ -113,8 +114,16 @@ export function SpawnPanel({
         {treeNodes.map((node, index) => {
                     const isLocked = !node.unlocked;
                     const isSelected = selectedSpawnLayer === node.level;
-                    const requiredPoints = node.level === 0 ? 0 : SPAWN_LAYER_UNLOCK_COST_BY_LEVEL[node.level] ?? 0;
-                    const nodeText = isLocked ? `Need ${requiredPoints} points` : `${node.items.length} unlocked`;
+      const requiredPoints = node.level === 0 ? 0 : SPAWN_LAYER_UNLOCK_COST_BY_LEVEL[node.level] ?? 0;
+      const previousLevel = Math.max(0, node.level - 1);
+      const previousCost = SPAWN_LAYER_UNLOCK_COST_BY_LEVEL[previousLevel] ?? 0;
+      const unlockCost = requiredPoints - previousCost;
+      const canUnlockNode = node.level === unlockedLayer + 1;
+      const isAffordable = unlockCost <= scoutPoints;
+      const nodeText = isLocked
+        ? `Need ${requiredPoints} points`
+        : `${node.items.length} unlocked`;
+      const unlockDisabled = isLocked && (!canUnlockNode || !isAffordable);
                     const cardClass = isSelected
                       ? 'border-gp-mint/80 bg-gp-mint/10'
                       : 'border-gp-accent/30 bg-gp-bg/30';
@@ -158,15 +167,33 @@ export function SpawnPanel({
                   </button>
 
                   {isLocked ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {Array.from({ length: 2 }).map((_, emptyIndex) => (
-                        <div
-                          key={`locked-${node.level}-${emptyIndex}`}
-                          className={EMPTY_SLOT_CLASS}
-                          style={EMPTY_SLOT_STYLE}
-                        />
-                      ))}
-                    </div>
+                    <>
+                      <div className="mb-2">
+                        <button
+                          type="button"
+                          onClick={() => onUnlockSpawnLayer(node.level)}
+                          disabled={unlockDisabled}
+                          className={`rounded-lg border px-2 py-1 text-xs transition ${
+                            unlockDisabled
+                              ? 'border-gp-accent/20 text-gp-mint/40 cursor-not-allowed'
+                              : 'border-emerald-400/80 text-emerald-200 hover:bg-emerald-900/30 cursor-pointer'
+                          }`}
+                        >
+                          {canUnlockNode
+                            ? `Unlock for ${unlockCost} point${unlockCost === 1 ? '' : 's'}`
+                            : `Unlock Lv.${previousLevel + 1} first`}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {Array.from({ length: 2 }).map((_, emptyIndex) => (
+                          <div
+                            key={`locked-${node.level}-${emptyIndex}`}
+                            className={EMPTY_SLOT_CLASS}
+                            style={EMPTY_SLOT_STYLE}
+                          />
+                        ))}
+                      </div>
+                    </>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {node.items.length === 0 ? (

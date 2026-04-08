@@ -6,4 +6,5 @@ export interface GameEvent {
   message: string;
   type: 'success' | 'info' | 'warning';
   timestamp: number;
+  turn?: number;
 }
