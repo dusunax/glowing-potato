@@ -17,6 +17,7 @@ interface UseItemSpawnOptions {
   biomeInfo: BiomeInfo;
   scoutRevealLevel: number;
   selectedSpawnLayer: number;
+  unlockedSpawnLayerItemCounts: Record<number, number>;
   addItem: (itemId: string, qty?: number) => void;
   markDiscovered: (itemId: string) => void;
   /** Returns remaining resources on the current tile; pass -1 to indicate depleted already */
@@ -28,6 +29,7 @@ export function useItemSpawn({
   biomeInfo,
   scoutRevealLevel,
   selectedSpawnLayer,
+  unlockedSpawnLayerItemCounts,
   addItem,
   markDiscovered,
   consumeTileResource,
@@ -39,19 +41,34 @@ export function useItemSpawn({
       if (remaining < 0) {
         return '';
       }
+      const effectiveRevealLevel = Math.min(scoutRevealLevel, selectedSpawnLayer);
       const spawnable = selectedSpawnLayer <= scoutRevealLevel
         ? getSpawnableItemsByLayer(ITEMS, conditions, scoutRevealLevel, selectedSpawnLayer, biomeInfo.type)
         : getSpawnableItemsUpToLayer(ITEMS, conditions, scoutRevealLevel, biomeInfo.type);
+
+      const unlockedCount = selectedSpawnLayer === 1
+        ? spawnable.length
+        : Math.max(0, unlockedSpawnLayerItemCounts[selectedSpawnLayer] ?? 0);
+
+      if (selectedSpawnLayer > 1 && unlockedCount <= 0) {
+        return `No unlocked spawnable items at Lv.${selectedSpawnLayer} yet. Use scout points to unlock one first.`;
+      }
+
+      const visibleSpawnable = unlockedCount < spawnable.length
+        ? spawnable.slice(0, unlockedCount)
+        : spawnable;
+
       const item = lucky
-        ? pickRandomItemLucky(spawnable, biomeInfo)
-        : pickRandomItemWithBiome(spawnable, biomeInfo);
+        ? pickRandomItemLucky(visibleSpawnable, biomeInfo, effectiveRevealLevel)
+        : pickRandomItemWithBiome(visibleSpawnable, biomeInfo, effectiveRevealLevel);
+
       if (!item) return 'Nothing to collect right now. Try a different time or weather.';
       addItem(item.id);
       markDiscovered(item.id);
       const depletedNote = remaining === 0 ? ' (tile now exhausted)' : '';
       return `You found a ${item.emoji} ${item.name}!${depletedNote}`;
     },
-    [biomeInfo, conditions, markDiscovered, scoutRevealLevel, selectedSpawnLayer, consumeTileResource, addItem]
+    [biomeInfo, conditions, markDiscovered, scoutRevealLevel, selectedSpawnLayer, consumeTileResource, addItem, unlockedSpawnLayerItemCounts]
   );
 
   return { collect };

@@ -228,9 +228,10 @@ type AttackResult = {
     (playerPos: PlayerPosition): WildAnimal[] => {
       return animalsRef.current.filter((a) => {
         if (!a.alive || a.behavior !== 'hostile') return false;
-        const px = Math.abs(a.position.x - playerPos.x);
-        const py = Math.abs(a.position.y - playerPos.y);
-        return px + py === 1; // Orthogonal only (cardinal direction)
+        const validNeighbors = new Set(
+          getMazeNeighbors(playerPos.x, playerPos.y).map((tile) => tileKey(tile.x, tile.y)),
+        );
+        return validNeighbors.has(tileKey(a.position.x, a.position.y));
       });
     },
     []

@@ -55,11 +55,11 @@ export const RECIPES: Recipe[] = [
   {
     id: 'bone_spear',
     name: 'Bone Spear',
-    description: 'Bind hide and stone onto a long branch for harder-hitting attacks.',
+    description: 'Bind a harvested bone and stone onto a long branch for harder-hitting attacks.',
     ingredients: [
       { itemId: 'branch', quantity: 1 },
-      { itemId: 'stone_blade', quantity: 1 },
-      { itemId: 'animal_hide', quantity: 1 },
+      { itemId: 'stone', quantity: 1 },
+      { itemId: 'bone', quantity: 2 },
     ],
     result: { itemId: 'bone_spear', quantity: 1 },
   },
@@ -71,7 +71,28 @@ export const RECIPES: Recipe[] = [
       { itemId: 'mushroom', quantity: 2 },
       { itemId: 'raindrop', quantity: 1 },
     ],
-    result: { itemId: 'fog_pearl', quantity: 1 },
+    result: { itemId: 'mushroom_soup', quantity: 1 },
+  },
+  {
+    id: 'fruit_herb_salad',
+    name: 'Apple-Herb Salad',
+    description: 'A refreshing salad made from apples and wild herbs.',
+    ingredients: [
+      { itemId: 'apple', quantity: 1 },
+      { itemId: 'sunberry', quantity: 1 },
+      { itemId: 'herb', quantity: 1 },
+    ],
+    result: { itemId: 'apple_herb_salad', quantity: 1 },
+  },
+  {
+    id: 'clam_soup',
+    name: 'Clam Soup',
+    description: 'A rich warm soup brewed from fresh clams and sea air.',
+    ingredients: [
+      { itemId: 'clam', quantity: 2 },
+      { itemId: 'raindrop', quantity: 1 },
+    ],
+    result: { itemId: 'clam_soup', quantity: 1 },
   },
   {
     id: 'healing_potion',
