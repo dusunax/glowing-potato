@@ -30,4 +30,6 @@ export interface Item {
   attackPower?: number;
   /** Health restored when consumed as food or potion. */
   healingAmount?: number;
+  /** Experience gained when consumed. */
+  xpGain?: number;
 }

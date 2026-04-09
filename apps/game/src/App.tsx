@@ -156,7 +156,9 @@ function CollectionGame({
     deathCause,
     scoutRevealLevel,
     scoutPoints,
+    spawnLayerUnlockedItemCounts,
     unlockSpawnLayer,
+    unlockNextSpawnItemAtLayer,
     selectedSpawnLayer,
     setSelectedSpawnLayer,
     hand,
@@ -1130,6 +1132,8 @@ function CollectionGame({
                       biomeType={currentBiomeInfo.type}
                       scoutPoints={scoutPoints}
                       scoutRevealLevel={scoutRevealLevel}
+                      unlockedSpawnLayerItemCounts={spawnLayerUnlockedItemCounts}
+                      onUnlockSpawnLayerItem={unlockNextSpawnItemAtLayer}
                       onUnlockSpawnLayer={unlockSpawnLayer}
                       selectedSpawnLayer={selectedSpawnLayer}
                       onSelectSpawnLayer={setSelectedSpawnLayer}

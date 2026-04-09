@@ -10,12 +10,13 @@ import { useCrafting } from './useCrafting';
 import { useMap } from './useMap';
 import { useActionCards } from './useActionCards';
 import { useAnimals } from './useAnimals';
-import { getItemById } from '../data/items';
+import { getItemById, ITEMS } from '../data/items';
 import { ANIMAL_TEMPLATES, createTemplateFromRandomHostileTemplate } from '../data/animals';
 import {
   getMaxUnlockedSpawnLayer,
   SPAWN_LAYER_UNLOCK_COST_BY_LEVEL,
   MAX_SPAWN_REVEAL_LEVEL,
+  getSpawnableItemsByLayerCatalog,
 } from '../utils/spawning';
 import type { GameEvent } from '../types/events';
 import type { ActionCard } from '../types/actionCard';
@@ -51,6 +52,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
   const [scoutPoints, setScoutPoints] = useState(0);
   const [scoutUnlockLevel, setScoutUnlockLevel] = useState(1);
   const [selectedSpawnLayer, setSelectedSpawnLayer] = useState(1);
+  const [spawnLayerUnlockedItemCounts, setSpawnLayerUnlockedItemCounts] = useState<Record<number, number>>({});
   const [showDamageFlash, setShowDamageFlash] = useState(false);
   const maxHpRef = useRef(BASE_PLAYER_HP);
   const playerHpRef = useRef(BASE_PLAYER_HP);
@@ -207,11 +209,41 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
     return Math.max(scoutUnlockLevel, pointReveal);
   }, [scoutPoints, scoutUnlockLevel]);
 
+  const getSpawnLayerItemCount = useCallback(
+    (level: number) =>
+      getSpawnableItemsByLayerCatalog(
+        ITEMS,
+        scoutRevealLevel,
+        level,
+        currentBiomeInfo.type,
+      ).length,
+    [scoutRevealLevel, currentBiomeInfo.type]
+  );
+
+  const normalizeLayer = useCallback((level: number) => {
+    return Math.max(1, Math.min(Math.floor(level), MAX_SPAWN_REVEAL_LEVEL));
+  }, []);
+
+  useEffect(() => {
+    const foundationLevel = 1;
+    const foundationCount = getSpawnLayerItemCount(foundationLevel);
+    setSpawnLayerUnlockedItemCounts((prev) => {
+      if (prev[foundationLevel] === foundationCount) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [foundationLevel]: foundationCount,
+      };
+    });
+  }, [getSpawnLayerItemCount]);
+
   const { collect } = useItemSpawn({
     conditions,
     biomeInfo: currentBiomeInfo,
     scoutRevealLevel,
     selectedSpawnLayer,
+    unlockedSpawnLayerItemCounts: spawnLayerUnlockedItemCounts,
     addItem,
     markDiscovered,
     consumeTileResource: () => consumeTileResource(position.x, position.y),
@@ -247,9 +279,82 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       setScoutPoints((prev) => prev - needed);
       setScoutUnlockLevel((prev) => Math.max(prev, normalizedLevel));
       setSelectedSpawnLayer(normalizedLevel);
+      setSpawnLayerUnlockedItemCounts((prev) => {
+        if (prev[normalizedLevel] !== undefined) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [normalizedLevel]: 0,
+        };
+      });
       pushEvent(`🗝️ Spawnable layer Lv.${normalizedLevel} unlocked.`, 'success');
     },
     [scoutPoints, scoutRevealLevel, setSelectedSpawnLayer, pushEvent]
+  );
+
+  const unlockNextSpawnItemAtLayer = useCallback(
+    (targetLevel: number) => {
+      const normalizedLevel = normalizeLayer(targetLevel);
+      if (normalizedLevel <= scoutRevealLevel) {
+        const availableCount = getSpawnLayerItemCount(normalizedLevel);
+        if (availableCount === 0) {
+          pushEvent(`No items available at Lv.${normalizedLevel} yet.`, 'warning');
+          return;
+        }
+        const currentUnlocked = Math.max(0, spawnLayerUnlockedItemCounts[normalizedLevel] ?? 0);
+        if (currentUnlocked >= availableCount) {
+          pushEvent(`Lv.${normalizedLevel} is fully unlocked.`, 'info');
+          return;
+        }
+        if (scoutPoints < 1) {
+          pushEvent(`Need 1 scout point to unlock next item at Lv.${normalizedLevel}.`, 'warning');
+          return;
+        }
+
+        const allLayerItems = getSpawnableItemsByLayerCatalog(
+          ITEMS,
+          scoutRevealLevel,
+          normalizedLevel,
+          currentBiomeInfo.type,
+        );
+        const sortedLayerItems = allLayerItems.slice().sort((a, b) => {
+          if (a.rarity !== b.rarity) return a.rarity - b.rarity;
+          return a.name.localeCompare(b.name);
+        });
+        const targetItem = sortedLayerItems[currentUnlocked];
+
+        setScoutPoints((prev) => prev - 1);
+        setSpawnLayerUnlockedItemCounts((prev) => {
+          const current = Math.max(0, prev[normalizedLevel] ?? 0);
+          const next = Math.min(availableCount, current + 1);
+          if (next === current) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [normalizedLevel]: next,
+          };
+        });
+        if (targetItem) {
+          pushEvent(`🔐 Lv.${normalizedLevel} unlocked: ${targetItem.name}.`, 'success');
+        } else {
+          pushEvent(`Lv.${normalizedLevel} unlocked one more item.`, 'success');
+        }
+        return;
+      }
+
+      pushEvent(`Unlock Lv.${normalizedLevel} first to unlock its items.`, 'warning');
+    },
+    [
+      currentBiomeInfo.type,
+      getSpawnLayerItemCount,
+      normalizeLayer,
+      scoutPoints,
+      scoutRevealLevel,
+      pushEvent,
+      spawnLayerUnlockedItemCounts,
+    ]
   );
   const advanceTimeBySteps = useCallback(
     (steps: number): TimeAdvanceResult => advance(steps),
@@ -264,6 +369,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
   const handleUseItem = useCallback(
     (itemId: string) => {
       if (isPlayerDead) return false;
+
       const item = getItemById(itemId);
       if (!item) return false;
 
@@ -271,7 +377,9 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       const isPotion = tags.includes('potion');
       const isFood = tags.includes('food');
       const isEdible = isFood || tags.includes('cooking');
-      const isConsumable = isPotion || isEdible;
+      const gainedXp = item.xpGain ?? 0;
+      const isXpConsumable = gainedXp > 0;
+      const isConsumable = isPotion || isEdible || isXpConsumable;
 
       if (!isConsumable) {
         pushEvent('This item cannot be consumed right now.', 'warning');
@@ -279,40 +387,52 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       }
 
       const maxRestore = maxPlayerHp;
+      const heal = isPotion || isEdible ? Math.max(0, item.healingAmount ?? 0) : 0;
+      const canHeal = heal > 0;
 
-      const heal = isPotion
-        ? Math.max(DEFAULT_HEAL, item.healingAmount ?? DEFAULT_HEAL)
-        : isEdible
-          ? Math.max(DEFAULT_HEAL, item.healingAmount ?? DEFAULT_HEAL)
-          : 0;
-      if (!Number.isFinite(heal) || heal <= 0) return false;
-
-      const currentHp = Math.min(playerHpRef.current, maxRestore);
-      if (currentHp >= maxRestore) {
-        pushEvent('HP is already full.', 'warning');
+      if (!canHeal && !isXpConsumable) {
+        pushEvent('This item has no effect to consume.', 'warning');
         return false;
       }
-
-      const restored = Math.min(maxRestore - currentHp, heal);
-      if (restored <= 0) {
-        pushEvent('HP is already full.', 'warning');
-        return false;
+      if (canHeal) {
+        if (playerHp >= maxRestore) {
+          pushEvent('HP is already full.', 'warning');
+          return false;
+        }
       }
 
       if (!removeItem(itemId, 1)) return false;
 
-      const nextPlayerHp = Math.min(maxRestore, currentHp + restored);
-      const appliedHp = nextPlayerHp - currentHp;
-      setPlayerHp(() => Math.min(maxHpRef.current, Math.max(0, nextPlayerHp)));
+      let appliedHp = 0;
+      let nextPlayerHp = 0;
+      setPlayerHp((prevHp) => {
+        const prev = Math.min(prevHp, maxRestore);
+        const next = Math.min(maxRestore, prev + heal);
+        appliedHp = next - prev;
+        nextPlayerHp = next;
+        return next;
+      });
+
+      if (isXpConsumable) {
+        gainExperience(gainedXp);
+      }
 
       const actionVerb = isPotion ? 'drank' : 'ate';
       const kind = isPotion ? '🧪' : '🍽️';
-      pushEvent(`[ITEM][USE] ${kind} You ${actionVerb} ${item.name}.`, 'success');
-      pushEvent(`[ITEM][USE] Item consumed: ${item.name}. (+${appliedHp} HP)`, 'success');
-      pushEvent(`[ITEM][USE] HP ${currentHp}/${maxRestore} → ${Math.min(maxRestore, currentHp + appliedHp)}/${maxRestore}.`, 'success');
+      const hpBefore = Math.max(0, nextPlayerHp - appliedHp);
+      if (isPotion || isFood) {
+        pushEvent(`[ITEM][USE] ${kind} You ${actionVerb} ${item.name}.`, 'success');
+        pushEvent(`[ITEM][USE] HP ${hpBefore}/${maxRestore} → ${nextPlayerHp}/${maxRestore} (+${appliedHp} HP).`, 'success');
+      } else {
+        pushEvent(`[ITEM][USE] ${kind} You used ${item.name}.`, 'success');
+      }
+
+      if (isXpConsumable) {
+        pushEvent(`[ITEM][XP] Gained ${gainedXp} XP from ${item.name}.`, 'success');
+      }
       return true;
     },
-    [isPlayerDead, maxHpRef, maxPlayerHp, playerHpRef, pushEvent, removeItem]
+    [gainExperience, isPlayerDead, maxPlayerHp, playerHp, pushEvent, removeItem]
   );
 
   const grantTreasureReward = useCallback(
@@ -366,12 +486,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       }
 
       let nextAnimals = moveAnimals(newPosition);
-      const adjacentHostilesBeforeSpawn = nextAnimals.filter(
-        (a) =>
-          a.alive &&
-          a.behavior === 'hostile' &&
-          Math.abs(a.position.x - newPosition.x) + Math.abs(a.position.y - newPosition.y) === 1
-      );
+      const adjacentHostilesBeforeSpawn = getAdjacentHostile(newPosition);
 
       if (caveSpawnCount > 0) {
         for (let i = 0; i < caveSpawnCount; i += 1) {
@@ -424,7 +539,17 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       });
       return { isNewDay };
     },
-    [advanceTimeBySteps, getLabeledAnimalName, moveAnimals, spawnCaveWave, replenishTileResources, pushEvent, isPlayerDead, triggerDamageFlash]
+    [
+      advanceTimeBySteps,
+      getAdjacentHostile,
+      getLabeledAnimalName,
+      moveAnimals,
+      spawnCaveWave,
+      replenishTileResources,
+      pushEvent,
+      isPlayerDead,
+      triggerDamageFlash,
+    ]
   );
 
   const handleCraft = useCallback(
@@ -641,6 +766,12 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
           addItem('animal_hide');
           markDiscovered('raw_meat');
           markDiscovered('animal_hide');
+          const isSkeleton = animalName === 'Skeleton' || animalName === 'Blood Skeleton';
+          if (isSkeleton) {
+            addItem('bone', 2);
+            markDiscovered('bone');
+            pushEvent('🦴 Bones obtained.', 'success');
+          }
           pushEvent('🥩 Raw Meat obtained.', 'success');
           pushEvent('🪶 Animal Hide obtained.', 'success');
         }
@@ -710,5 +841,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
     // Logging
     pushEvent,
     showDamageFlash,
+    spawnLayerUnlockedItemCounts,
+    unlockNextSpawnItemAtLayer,
   };
 }
