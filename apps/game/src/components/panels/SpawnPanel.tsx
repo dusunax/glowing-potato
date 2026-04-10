@@ -98,7 +98,7 @@ export function SpawnPanel({
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" data-testid="spawn-panel">
       <CardTitle className="mb-0.5">🌍 Spawnable Now</CardTitle>
       <p className="text-xs text-gp-mint/70 mb-1">
         {spawnable.length} item(s) available
@@ -130,7 +130,7 @@ export function SpawnPanel({
                       : 'border-gp-accent/30 bg-gp-bg/30';
 
           return (
-            <div key={`spawn-tree-${node.level}`} className="relative">
+            <div key={`spawn-tree-${node.level}`} className="relative" data-testid={`spawn-layer-${node.level}`}>
               <div className="flex items-start gap-3">
                 <div className="relative mt-1">
                   <div
@@ -147,6 +147,7 @@ export function SpawnPanel({
 
                 <div className="flex-1">
                   <div
+                    data-testid={`spawn-layer-${node.level}-card`}
                     role="button"
                     tabIndex={isLocked ? -1 : 0}
                     onClick={() => {
@@ -173,6 +174,7 @@ export function SpawnPanel({
                         {isLocked ? (
                           <button
                             type="button"
+                            data-testid={`spawn-layer-${node.level}-unlock-layer-btn`}
                             onClick={(event) => {
                               event.stopPropagation();
                               if (!unlockDisabled) {
@@ -190,6 +192,7 @@ export function SpawnPanel({
                         ) : canUnlockItem ? (
                           <button
                             type="button"
+                            data-testid={`spawn-layer-${node.level}-unlock-item-btn`}
                             onClick={(event) => {
                               event.stopPropagation();
                               if (canUnlockItemNow) {

@@ -5,10 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --dir apps/game dev",
+    "test": "pnpm --dir apps/game test",
+    "test:watch": "pnpm --dir apps/game test:watch",
+    "test:coverage": "pnpm --dir apps/game test:coverage",
+    "test:ci": "pnpm --dir apps/game test run",
+    "data-integrity": "pnpm --dir apps/game test run src/data/dataIntegrity.test.ts",
+    "prepush": "pnpm run build && pnpm run data-integrity",
     "build": "pnpm --dir packages/ui build && pnpm --dir apps/game build",
     "lint": "eslint .",
     "preview": "pnpm --dir apps/game preview",
-    "deploy": "pnpm run build && firebase deploy --only hosting"
+    "deploy": "pnpm run build && firebase deploy --only hosting",
+    "postinstall": "node scripts/setup-git-hooks.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

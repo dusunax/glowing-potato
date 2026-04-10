@@ -3,7 +3,9 @@
 
 import type { Item } from '../types/items';
 
-export const ITEMS: Item[] = [
+type ItemDefinition = Omit<Item, 'itemNo'>;
+
+const ITEM_DEFINITIONS: ItemDefinition[] = [
   // ── Animal loot (not naturally spawnable) ─────────────────────────────────
   {
     id: 'raw_meat',
@@ -145,7 +147,7 @@ export const ITEMS: Item[] = [
     name: 'Gold ⚜️',
     emoji: '⚜️',
     description: 'A ceremonial gold charm from the treasure chest.',
-    rarity: 2,
+    rarity: 4,
     category: 'mineral',
     tags: ['loot'],
     spawnConditions: { seasons: [] },
@@ -621,6 +623,11 @@ export const ITEMS: Item[] = [
     },
   },
 ];
+
+export const ITEMS: Item[] = ITEM_DEFINITIONS.map((item, index) => ({
+  ...item,
+  itemNo: index + 1,
+}));
 
 export const getItemById = (id: string): Item | undefined =>
   ITEMS.find((item) => item.id === id);

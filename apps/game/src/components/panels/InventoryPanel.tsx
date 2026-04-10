@@ -36,7 +36,7 @@ export function InventoryPanel({
   const selectedSlotLabel = `${selectedBeltSlot === 0 ? 'Weapon Slot' : `Slot ${selectedBeltSlot}`} ${selectedSlotItem ? `(${getItemById(selectedSlotItem)?.name ?? 'Empty'})` : '(Empty)'}`;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" data-testid="inventory-panel">
       <CardTitle className="mb-3">🎒 Inventory</CardTitle>
       <div className="mb-3 space-y-2">
         <div className="text-sm text-gp-mint/80">Assign Belt Slots</div>
@@ -50,6 +50,7 @@ export function InventoryPanel({
                 <button
                   key={`belt-slot-config-${index}`}
                   type="button"
+                  data-testid={`inventory-belt-slot-${index}`}
                   onClick={() => onSelectBeltSlot(index)}
                   className={`relative w-full min-h-12 rounded-lg border transition-all ${isSelected ? 'ring-2 ring-gp-mint/80 border-gp-mint bg-gp-mint/15 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]' : 'border-gp-accent/30 bg-gp-bg/30 hover:border-gp-accent/70'}`}
                 >
@@ -60,11 +61,12 @@ export function InventoryPanel({
                 </button>
               );
             }
-            return (
-              <button
-                key={`belt-slot-config-${index}`}
-                type="button"
-                onClick={() => onSelectBeltSlot(index)}
+              return (
+                <button
+                  key={`belt-slot-config-${index}`}
+                  type="button"
+                  data-testid={`inventory-belt-slot-${index}`}
+                  onClick={() => onSelectBeltSlot(index)}
                 className={`relative min-h-12 rounded-lg border transition-colors ${isSelected ? 'border-gp-mint bg-gp-mint/20 ring-2 ring-gp-mint/70' : 'border-gp-accent/30 bg-gp-bg/40 hover:border-gp-accent/70 flex flex-col'} ${itemId ? 'text-gp-mint' : 'text-gp-mint/60'}`}
               >
                 <div className="text-xs mb-1 absolute text-left px-2 pt-1 top-0">{index === 0 ? 'W' : `${index}`}</div>
@@ -73,7 +75,9 @@ export function InventoryPanel({
             );
           })}
         </div>
-                <div className="text-xs text-gp-mint/60">Selected: {selectedSlotLabel}</div>
+                <div data-testid="inventory-selected-slot-label" className="text-xs text-gp-mint/60">
+                  Selected: {selectedSlotLabel}
+                </div>
               </div>
 
       <div className="flex-1 min-h-0 flex flex-col gap-2">
@@ -84,6 +88,7 @@ export function InventoryPanel({
               return (
                 <div
                   key={`empty-${index}`}
+                  data-testid={`inventory-empty-slot-${index}`}
                   className={`${EMPTY_SLOT_CLASS} bg-gp-bg/10 flex items-center justify-center text-[11px] text-gp-mint/70 font-semibold uppercase tracking-wide`}
                   style={EMPTY_SLOT_STYLE}
                 >
@@ -94,12 +99,14 @@ export function InventoryPanel({
 
             const isBeltItem = canUseInBelt(slot.itemId, selectedBeltSlot);
             return (
-              <div key={slot.itemId} className="rounded-lg border border-gp-accent/30 bg-gp-bg/30 p-2 space-y-2">
+            <div key={slot.itemId} className="rounded-lg border border-gp-accent/30 bg-gp-bg/30 p-2 space-y-2">
+              <div data-testid={`inventory-slot-${index}`}>
                 <ItemCard slot={slot} />
                 <div className="flex items-center gap-2">
                   {isBeltItem && (
                     <button
                       type="button"
+                      data-testid={`inventory-assign-${index}-${slot.itemId}`}
                       onClick={() => onAssignToBelt(selectedBeltSlot, slot.itemId)}
                       className="text-xs px-2 py-1 rounded bg-gp-accent/30 text-gp-mint hover:bg-gp-accent/50"
                     >
@@ -112,12 +119,14 @@ export function InventoryPanel({
                       onClick={() => {
                         onClearBeltSlot(selectedBeltSlot);
                       }}
+                      data-testid={`inventory-clear-${selectedBeltSlot}-${slot.itemId}`}
                       className="text-xs px-2 py-1 rounded border border-amber-400/50 text-amber-200 hover:bg-amber-900/30"
                     >
                       Clear Selected
                     </button>
                     )}
                 </div>
+              </div>
               </div>
             );
           })}

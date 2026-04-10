@@ -27,7 +27,6 @@ const BASE_PLAYER_HP = 10;
 const XP_BASE_TO_NEXT_LEVEL = 12;
 const XP_LEVEL_GROWTH = 2;
 const HP_INCREASE_PER_LEVEL = 2;
-const DEFAULT_HEAL = 1;
 const TREASURE_XP_MIN = 8;
 const TREASURE_XP_MAX = 18;
 type TreasureRewardType = 'xp' | 'weapon' | 'gold_chunk';
@@ -60,7 +59,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
   const [defeatedAnimals, setDefeatedAnimals] = useState<AnimalRecord[]>([]);
   const [hasUsedSummonMonster, setHasUsedSummonMonster] = useState(false);
   const isPlayingCardRef = useRef(false);
-  const damageFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const damageFlashTimerRef = useRef<number | NodeJS.Timeout | null>(null);
 
   const pushEvent = useCallback((message: string, type: GameEvent['type'] = 'info', turn?: number) => {
     const timestamp = Date.now();
@@ -485,19 +484,19 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
         pushEvent(`🔄 Resources replenished after ${resourceRefillCount} ${dayLabel} cycle.`, 'success');
       }
 
-      let nextAnimals = moveAnimals(newPosition);
+      moveAnimals(newPosition);
       const adjacentHostilesBeforeSpawn = getAdjacentHostile(newPosition);
 
       if (caveSpawnCount > 0) {
         for (let i = 0; i < caveSpawnCount; i += 1) {
-          nextAnimals = spawnCaveWave(undefined, newPosition);
+          spawnCaveWave(undefined, newPosition);
         }
         const waveLabel = caveSpawnCount === 1 ? 'wave' : 'waves';
         pushEvent(`❗️ Cave Spawn: ${caveSpawnCount} ${waveLabel} of animals emerged.`, 'warning');
       }
       if (skeletonSpawnCount > 0) {
         for (let i = 0; i < skeletonSpawnCount; i += 1) {
-          nextAnimals = spawnCaveWave(ANIMAL_TEMPLATES.skeleton, newPosition);
+          spawnCaveWave(ANIMAL_TEMPLATES.skeleton, newPosition);
         }
         const suffix = skeletonSpawnCount === 1 ? '' : 's';
         pushEvent(`💀 ${skeletonSpawnCount} cave skeleton wave${suffix} emerged!`, 'warning');
