@@ -19,6 +19,7 @@ export interface SpawnConditions {
 
 export interface Item {
   id: ItemId;
+  itemNo?: number;
   name: string;
   description: string;
   emoji: string;

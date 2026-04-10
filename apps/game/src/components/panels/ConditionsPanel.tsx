@@ -22,7 +22,10 @@ export function ConditionsPanel({ conditions, onAdvanceTime, onCollect, events }
   const seasonColor = getSeasonColor(conditions.season);
 
   return (
-    <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4">
+    <div
+      className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4"
+      data-testid="conditions-panel"
+    >
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <div className="flex items-center gap-2">
           <span className="text-2xl">{tpEmoji}</span>
@@ -54,10 +57,20 @@ export function ConditionsPanel({ conditions, onAdvanceTime, onCollect, events }
           </div>
         </div>
         <div className="ml-auto flex gap-2">
-          <Button variant="primary" size="md" onClick={onCollect}>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={onCollect}
+            data-testid="conditions-collect-btn"
+          >
             🌿 Collect
           </Button>
-          <Button variant="outline" size="md" onClick={onAdvanceTime}>
+          <Button
+            variant="outline"
+            size="md"
+            onClick={onAdvanceTime}
+            data-testid="conditions-end-turn-btn"
+          >
             ⏭ End Turn
           </Button>
         </div>
@@ -67,6 +80,7 @@ export function ConditionsPanel({ conditions, onAdvanceTime, onCollect, events }
           {events.slice(0, 3).map((ev) => (
             <div
               key={ev.id}
+              data-testid={`conditions-event-${ev.id}`}
               className={`text-sm px-3 py-1 rounded-md ${
                 ev.type === 'success' ? 'bg-gp-accent/20 text-gp-mint' :
                 ev.type === 'warning' ? 'bg-amber-900/40 text-amber-200' :
