@@ -7,6 +7,7 @@ import type { ActionCard } from '../../types/actionCard';
 import type { WildAnimal } from '../../types/animal';
 import type { CSSProperties } from 'react';
 import { CardTitle } from '@glowing-potato/ui';
+import PlayerMarker, { type PlayerActionState } from './PlayerMarker';
 
 interface MapPanelProps {
   position: PlayerPosition;
@@ -23,6 +24,9 @@ interface MapPanelProps {
   getAnimalsAt: (x: number, y: number) => WildAnimal[];
   getReachableTiles: (from: PlayerPosition, maxSteps: number) => Set<string>;
   nearbyAnimalTiles: Set<string>;
+  equippedWeaponEmoji?: string;
+  equippedWeaponName?: string;
+  playerActionState?: PlayerActionState;
 }
 
 export function MapPanel({
@@ -39,6 +43,9 @@ export function MapPanel({
   getAnimalsAt,
   getReachableTiles,
   nearbyAnimalTiles,
+  equippedWeaponEmoji,
+  equippedWeaponName,
+  playerActionState = 'idle',
 }: MapPanelProps) {
   const isMoveCard = selectedCard?.type === 'explore' || selectedCard?.type === 'sprint';
   const moveRange = selectedCard?.moveRange ?? 1;
@@ -79,6 +86,7 @@ export function MapPanel({
             const isNearbyAnimal = nearbyAnimalTiles.has(key);
             const shouldShowTexture = isVisited || isKnown || isPlayer;
             const texturePath = shouldShowTexture && biomeInfo.texture ? biomeInfo.texture : undefined;
+  const playerMode: PlayerActionState = isMoveCard ? 'move' : playerActionState;
 
             const tileStyle: CSSProperties = {};
             if (texturePath) {
@@ -131,8 +139,9 @@ export function MapPanel({
               : (isNearbyAnimal || isPlayer);
 
             return (
-              <div key={key} className="relative">
+              <div key={key} className="relative" data-testid={`map-tile-${x}-${y}`}>
                 <button
+                  data-testid={`map-panel-tile-btn-${x}-${y}`}
                   onClick={() => clickable ? onTileClick(x, y) : undefined}
                   disabled={!clickable}
                   className={tileClass}
@@ -153,7 +162,13 @@ export function MapPanel({
                       <span className={`absolute left-0.5 bottom-0.5 ${isKnown && !isVisited ? 'opacity-50' : ''}`}>{tileEmoji}</span>
 
                       {/* Player marker */}
-                      {isPlayer && <span className="text-[9px] leading-none">🧑</span>}
+                      {isPlayer && (
+                        <PlayerMarker
+                          mode={playerMode}
+                          equippedWeaponEmoji={equippedWeaponEmoji}
+                          equippedWeaponName={equippedWeaponName}
+                        />
+                      )}
 
                       {/* Animal markers — visible on any revealed tile */}
                       {animals.length > 0 && (

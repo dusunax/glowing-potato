@@ -278,6 +278,8 @@ function CollectionGame({
   const [selectedBeltSlot, setSelectedBeltSlot] = useState(0);
   const [moveCardFlash, setMoveCardFlash] = useState(false);
   const moveCardFlashTimer = useRef<number | null>(null);
+  const [playerActionState, setPlayerActionState] = useState<'idle' | 'skill' | 'discover' | 'attack'>('idle');
+  const playerActionStateTimer = useRef<number | null>(null);
 
   const seasonColorClass = getSeasonColor(conditions.season);
   const activeTabIndex = activeTab ? TABS.findIndex((tab) => tab.id === activeTab) : 0;
@@ -290,6 +292,32 @@ function CollectionGame({
     }
     return tiles;
   }, [adjacentAnimals]);
+
+  const triggerPlayerActionState = useCallback((nextState: 'idle' | 'skill' | 'discover' | 'attack') => {
+    if (playerActionStateTimer.current) {
+      window.clearTimeout(playerActionStateTimer.current);
+    }
+
+    setPlayerActionState(nextState);
+
+    if (nextState === 'idle') {
+      playerActionStateTimer.current = null;
+      return;
+    }
+
+    playerActionStateTimer.current = window.setTimeout(() => {
+      setPlayerActionState('idle');
+      playerActionStateTimer.current = null;
+    }, 900);
+  }, []);
+
+  const clearPlayerActionState = useCallback(() => {
+    if (playerActionStateTimer.current) {
+      window.clearTimeout(playerActionStateTimer.current);
+      playerActionStateTimer.current = null;
+    }
+    setPlayerActionState('idle');
+  }, []);
 
   function onCardClick(card: ActionCard) {
     if (isPlayerDead) return;
@@ -307,6 +335,7 @@ function CollectionGame({
       // Toggle selection — requires a map tile target
       selectCard(card);
     } else {
+      triggerPlayerActionState(isForageCard(card.type) ? 'discover' : 'skill');
       // Execute immediately
       handlePlayCard(card);
     }
@@ -318,10 +347,11 @@ function CollectionGame({
       grantTreasureReward(rewardType);
       setHasClaimedTreasureReward(true);
       setShowTreasureRewardModal(false);
+      triggerPlayerActionState('discover');
       handlePlayCard(pendingTreasureRewardCard, undefined, { skipTreasureCollect: true });
       setPendingTreasureRewardCard(null);
     },
-    [grantTreasureReward, handlePlayCard, isPlayerDead, pendingTreasureRewardCard],
+    [grantTreasureReward, handlePlayCard, isPlayerDead, pendingTreasureRewardCard, triggerPlayerActionState],
   );
 
   function onTileClick(x: number, y: number) {
@@ -339,11 +369,12 @@ function CollectionGame({
       return;
     }
 
-    const target = adjacentAnimals.find((a) => a.position.x === x && a.position.y === y);
-    if (target) {
+  const target = adjacentAnimals.find((a) => a.position.x === x && a.position.y === y);
+  if (target) {
+      triggerPlayerActionState('attack');
       handleStrike(target.id);
       return;
-    }
+  }
 
     if (!selectedCard) return;
     if (selectedCard.type === 'explore' || selectedCard.type === 'sprint') {
@@ -428,6 +459,14 @@ function CollectionGame({
     });
   }, [beltSlots, inventory]);
 
+  const equippedWeaponItem = useMemo(() => {
+    const equipped = beltSlotData[WEAPON_BELT_SLOT_INDEX];
+    if (!equipped?.itemId) return null;
+    const item = getItemById(equipped.itemId);
+    if (!item || item.category !== 'weapon') return null;
+    return item;
+  }, [beltSlotData, WEAPON_BELT_SLOT_INDEX]);
+
   const canAssignSlot = useCallback(
     (slotIndex: number, itemId: string) => {
       const stock = getQuantity(itemId);
@@ -465,6 +504,14 @@ function CollectionGame({
       return next;
     });
   }, [canAssignSlot]);
+
+  const handleAttackAnimal = useCallback(
+    (animal: { id: string }) => {
+      triggerPlayerActionState('attack');
+      handleStrike(animal.id);
+    },
+    [handleStrike, triggerPlayerActionState],
+  );
 
   const handleCraftWithAutoEquip = useCallback(
     (recipeId: string): string => {
@@ -583,8 +630,11 @@ function CollectionGame({
       if (moveCardFlashTimer.current) {
         window.clearTimeout(moveCardFlashTimer.current);
       }
+      if (playerActionStateTimer.current) {
+        window.clearTimeout(playerActionStateTimer.current);
+      }
     };
-  }, []);
+  }, [clearPlayerActionState]);
 
   useEffect(() => {
     setBeltSlots((prev) => {
@@ -680,6 +730,9 @@ function CollectionGame({
           getAnimalsAt={getAnimalsAt}
           getReachableTiles={getReachableTiles}
           nearbyAnimalTiles={nearbyAnimals}
+          equippedWeaponEmoji={equippedWeaponItem?.emoji}
+          equippedWeaponName={equippedWeaponItem?.name}
+          playerActionState={playerActionState}
         />
 
         <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-3">
@@ -802,13 +855,16 @@ function CollectionGame({
                   <span className="text-xs text-gp-mint/85">
                     {getLabeledAnimalDisplayName(a.name)}
                   </span>
-                  <span className={`text-xs font-bold ${a.behavior === 'hostile' ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {a.behavior === 'hostile' ? '⚔️' : '🕊️'}
-                  </span>
+                  <span className="text-xs font-bold text-gp-mint/80">⚔️</span>
                   <span className="text-xs text-gp-mint/60">{a.hp}/{a.maxHp}HP</span>
-                  <Button size="sm" variant="ghost" onClick={() => handleStrike(a.id)} disabled={isPlayerDead}>
-                    Attack
-                  </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleAttackAnimal(a)}
+                        disabled={isPlayerDead}
+                      >
+                        Attack
+                      </Button>
                 </div>
               ))}
             </div>
