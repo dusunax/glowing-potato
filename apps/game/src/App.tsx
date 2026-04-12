@@ -819,7 +819,6 @@ function CollectionGame({
     canMoveTo,
     selectCard,
     handlePlayCard,
-    handleStrike,
     triggerPlayerActionState,
     adjacentAnimals,
     handleAttackAnimal,
