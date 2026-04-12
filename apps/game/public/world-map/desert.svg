@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<defs>
+    <linearGradient id="desertBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7d38a"/>
+      <stop offset="100%" stop-color="#b78445"/>
+    </linearGradient>
+    <pattern id="sand" width="20" height="20" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="20" y2="20" stroke="#e3bf7a" stroke-opacity="0.45" stroke-width="1"/>
+      <line x1="20" y1="0" x2="0" y2="20" stroke="#d8b16c" stroke-opacity="0.3" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="64" height="64" fill="url(#desertBase)"/>
+  <rect width="64" height="64" fill="url(#sand)"/>
+  <path d="M-10 62 Q12 46 34 56 T78 50 V64 H-10 Z" fill="#d9af6d" opacity="0.55"/>
+  <path d="M-8 60 Q14 42 33 54 T80 48" stroke="#d39c4f" stroke-width="3" fill="none" opacity="0.55"/>
+</svg>

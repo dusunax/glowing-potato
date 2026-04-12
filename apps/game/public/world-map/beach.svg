@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="beachBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fee9b3"/>
+      <stop offset="100%" stop-color="#dfbf77"/>
+    </linearGradient>
+    <pattern id="dunes" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M0 12 C4 8 12 8 16 12" stroke="#e4be79" stroke-width="2" fill="none"/>
+      <path d="M-2 16 C4 12 12 12 18 16" stroke="#f2c98a" stroke-width="1.5" fill="none"/>
+    </pattern>
+  </defs>
+  <rect width="64" height="64" fill="url(#beachBase)"/>
+  <rect width="64" height="64" fill="url(#dunes)"/>
+  <ellipse cx="14" cy="56" rx="9" ry="4" fill="#f3d9a1"/>
+  <ellipse cx="36" cy="56" rx="10" ry="5" fill="#e6cd98"/>
+  <ellipse cx="56" cy="56" rx="8" ry="3.5" fill="#f0d09f"/>
+</svg>

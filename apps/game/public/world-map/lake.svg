@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="lakeBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3b7fd5"/>
+      <stop offset="100%" stop-color="#205a9f"/>
+    </linearGradient>
+    <pattern id="ripple" width="12" height="12" patternUnits="userSpaceOnUse">
+      <circle cx="6" cy="6" r="5" fill="none" stroke="#dff1ff" stroke-opacity="0.14" stroke-width="1.2"/>
+    </pattern>
+  </defs>
+  <rect width="64" height="64" fill="url(#lakeBase)"/>
+  <rect width="64" height="64" fill="url(#ripple)"/>
+  <g fill="#1e4f8f" opacity="0.45">
+    <ellipse cx="20" cy="50" rx="15" ry="7"/>
+    <ellipse cx="46" cy="40" rx="11" ry="6"/>
+    <ellipse cx="36" cy="22" rx="9" ry="4"/>
+  </g>
+</svg>

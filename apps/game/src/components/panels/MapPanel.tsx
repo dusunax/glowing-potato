@@ -5,6 +5,7 @@ import { tileKey } from '../../hooks/useMap';
 import type { PlayerPosition, BiomeInfo, BiomeType } from '../../types/map';
 import type { ActionCard } from '../../types/actionCard';
 import type { WildAnimal } from '../../types/animal';
+import type { CSSProperties } from 'react';
 import { CardTitle } from '@glowing-potato/ui';
 
 interface MapPanelProps {
@@ -58,7 +59,7 @@ export function MapPanel({
 
       {/* World grid */}
       <div
-        className="grid gap-1 mb-3"
+        className="grid gap-0.5 mb-3"
         style={{ gridTemplateColumns: `repeat(${mapGrid[0]?.length ?? MAP_COLS}, 1fr)` }}
       >
         {mapGrid.map((row, y) =>
@@ -71,11 +72,22 @@ export function MapPanel({
             const isReachable = reachable.has(key) && animals.length === 0;
             const biomeInfo = BIOME_INFO[biome];
             const isTreasureTile = biome === 'treasure';
-            const tileEmoji = isTreasureTile && isTreasureRewardClaimed ? '🪙' : biomeInfo.emoji;
+            const tileEmoji = isTreasureTile && isTreasureRewardClaimed ? '📭' : biomeInfo.emoji;
             const tileName = isTreasureTile && isTreasureRewardClaimed ? 'Treasure Opened' : biomeInfo.name;
             const resources = getTileResources(x, y);
             const depleted = resources === 0;
             const isNearbyAnimal = nearbyAnimalTiles.has(key);
+            const shouldShowTexture = isVisited || isKnown || isPlayer;
+            const texturePath = shouldShowTexture && biomeInfo.texture ? biomeInfo.texture : undefined;
+
+            const tileStyle: CSSProperties = {};
+            if (texturePath) {
+              const dimFactor = !isVisited && isKnown ? 0.65 : isVisited && depleted ? 0.5 : 0.22;
+              tileStyle.backgroundImage = `linear-gradient(rgba(8, 16, 12, ${dimFactor}), rgba(8, 16, 12, ${dimFactor})), url('${texturePath}')`;
+              tileStyle.backgroundSize = 'cover';
+              tileStyle.backgroundPosition = 'center';
+              tileStyle.backgroundRepeat = 'no-repeat';
+            }
 
             // Determine visual passage indicators (right and down borders)
             const hasRightPassage = getMazeNeighbors(x, y).some((n) => n.x === x + 1 && n.y === y);
@@ -83,7 +95,7 @@ export function MapPanel({
 
             // Build tile class
             let tileClass =
-              'aspect-square flex w-full h-full flex-col items-center justify-center rounded-lg text-base transition-all duration-150 relative select-none';
+              'aspect-square flex w-full h-full flex-col items-center justify-center text-base transition-all duration-150 relative select-none';
 
             if (isReachable) {
               // Reachable via card — highlight even if hidden (sprint can dash into fog)
@@ -109,6 +121,10 @@ export function MapPanel({
                 : ' border border-gp-accent/20 bg-gp-bg/30 cursor-default';
             }
 
+            if (texturePath) {
+              tileClass += ' bg-center bg-cover bg-no-repeat';
+            }
+
             const hidden = !isVisited && !isKnown;
             const clickable = isMoveCard
               ? (isReachable || isNearbyAnimal || isPlayer)
@@ -120,6 +136,7 @@ export function MapPanel({
                   onClick={() => clickable ? onTileClick(x, y) : undefined}
                   disabled={!clickable}
                   className={tileClass}
+                  style={texturePath ? tileStyle : undefined}
                   title={hidden ? '???' : tileName}
                   aria-label={hidden ? 'Unknown tile' : `${tileName}${isPlayer ? ' (you are here)' : ''}`}
                 >
@@ -133,7 +150,7 @@ export function MapPanel({
                   ) : (
                     <>
                       {/* Biome emoji */}
-                      <span className={isKnown && !isVisited ? 'opacity-50' : ''}>{tileEmoji}</span>
+                      <span className={`absolute left-0.5 bottom-0.5 ${isKnown && !isVisited ? 'opacity-50' : ''}`}>{tileEmoji}</span>
 
                       {/* Player marker */}
                       {isPlayer && <span className="text-[9px] leading-none">🧑</span>}
