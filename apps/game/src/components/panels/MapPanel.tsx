@@ -1,11 +1,22 @@
 // Displays the world map with fog-of-war, maze passages, resource counters, and animals.
 
-import { MAP_COLS, MAP_ROWS, BIOME_INFO, getMazeNeighbors } from '../../data/map';
+import {
+  BIOME_ICON_SPRITE_COLUMNS,
+  BIOME_ICON_SPRITES,
+  BIOME_ICON_SPRITE_SIZE,
+  MAP_COLS,
+  MAP_ROWS,
+  BIOME_INFO,
+  getMazeNeighbors,
+} from '../../data/map';
 import { tileKey } from '../../hooks/useMap';
 import type { PlayerPosition, BiomeInfo, BiomeType } from '../../types/map';
 import type { ActionCard } from '../../types/actionCard';
 import type { WildAnimal } from '../../types/animal';
+import type { CSSProperties } from 'react';
 import { CardTitle } from '@glowing-potato/ui';
+import PlayerMarker, { type PlayerActionState } from './PlayerMarker';
+import { AnimalSprite } from '../ui/AnimalSprite';
 
 interface MapPanelProps {
   position: PlayerPosition;
@@ -22,6 +33,9 @@ interface MapPanelProps {
   getAnimalsAt: (x: number, y: number) => WildAnimal[];
   getReachableTiles: (from: PlayerPosition, maxSteps: number) => Set<string>;
   nearbyAnimalTiles: Set<string>;
+  equippedWeaponEmoji?: string;
+  equippedWeaponName?: string;
+  playerActionState?: PlayerActionState;
 }
 
 export function MapPanel({
@@ -32,12 +46,16 @@ export function MapPanel({
   mapGrid,
   currentBiomeInfo,
   isTreasureRewardClaimed = false,
+  canMoveTo,
   visitedTiles,
   knownTiles,
   getTileResources,
   getAnimalsAt,
   getReachableTiles,
   nearbyAnimalTiles,
+  equippedWeaponEmoji,
+  equippedWeaponName,
+  playerActionState = 'idle',
 }: MapPanelProps) {
   const isMoveCard = selectedCard?.type === 'explore' || selectedCard?.type === 'sprint';
   const moveRange = selectedCard?.moveRange ?? 1;
@@ -46,19 +64,36 @@ export function MapPanel({
     ? getReachableTiles(position, moveRange)
     : new Set<string>();
 
+  const worldMapTitleIcon: [number, number] = [0, 7];
+  const worldMapTitleIconSheet: keyof typeof BIOME_ICON_SPRITES = 'default';
+  const worldMapTitleIconPath = BIOME_ICON_SPRITES[worldMapTitleIconSheet];
+  const worldMapTitleIconStyle: CSSProperties = {
+    backgroundImage: `url('${worldMapTitleIconPath}')`,
+    backgroundSize: `${BIOME_ICON_SPRITE_COLUMNS * BIOME_ICON_SPRITE_SIZE}px auto`,
+    backgroundPosition: `${-(worldMapTitleIcon[1] * BIOME_ICON_SPRITE_SIZE)}px ${-(worldMapTitleIcon[0] * BIOME_ICON_SPRITE_SIZE)}px`,
+    backgroundRepeat: 'no-repeat',
+    imageRendering: 'pixelated',
+  };
   return (
     <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <CardTitle>🗺️ World Map</CardTitle>
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-gp-mint">
-          <span>{currentBiomeInfo.emoji}</span>
-          <span>{currentBiomeInfo.name}</span>
+      <div className="flex items-end justify-between mb-3">
+        <div className="flex items-center">
+          <span
+            className="inline-block shrink-0 rounded-sm bg-contain w-8 h-8 scale-75"
+            style={worldMapTitleIconStyle}
+            aria-hidden="true"
+            title="World map icon"
+          />
+          <CardTitle>World Map</CardTitle>
+        </div>
+        <div className="text-sm font-semibold text-gp-mint/50">
+          <span>@{currentBiomeInfo.name}</span>
         </div>
       </div>
 
       {/* World grid */}
       <div
-        className="grid gap-1 mb-3"
+        className="grid gap-0.5 mb-3"
         style={{ gridTemplateColumns: `repeat(${mapGrid[0]?.length ?? MAP_COLS}, 1fr)` }}
       >
         {mapGrid.map((row, y) =>
@@ -68,14 +103,44 @@ export function MapPanel({
             const isVisited = visitedTiles.has(key);
             const isKnown = knownTiles.has(key);
             const animals = getAnimalsAt(x, y);
-            const isReachable = reachable.has(key) && animals.length === 0;
+            const moveTarget = isMoveCard && (reachable.has(key) || canMoveTo(x, y, moveRange));
+            const isReachable = moveTarget && animals.length === 0;
             const biomeInfo = BIOME_INFO[biome];
             const isTreasureTile = biome === 'treasure';
-            const tileEmoji = isTreasureTile && isTreasureRewardClaimed ? '🪙' : biomeInfo.emoji;
+            const tileEmoji = isTreasureTile && isTreasureRewardClaimed ? '📭' : biomeInfo.emoji;
             const tileName = isTreasureTile && isTreasureRewardClaimed ? 'Treasure Opened' : biomeInfo.name;
             const resources = getTileResources(x, y);
             const depleted = resources === 0;
             const isNearbyAnimal = nearbyAnimalTiles.has(key);
+            const shouldShowTexture = isVisited || isKnown || isPlayer;
+            const texturePath = shouldShowTexture && biomeInfo.texture ? biomeInfo.texture : undefined;
+            const isOceanBiome = biome === 'lake';
+            const playerMode: PlayerActionState = isMoveCard ? 'move' : playerActionState;
+            const isAttackableTile = isNearbyAnimal;
+            const iconCoord = biomeInfo.iconSpriteMatrix ?? [0, 0];
+            const iconRow = iconCoord[0] ?? 0;
+            const iconColumn = iconCoord[1] ?? 0;
+            const iconSpritePath = BIOME_ICON_SPRITES[biomeInfo.iconSpriteSheet ?? 'default'];
+            const biomeIconStyle: CSSProperties = {
+              backgroundImage: `url('${iconSpritePath}')`,
+              backgroundSize: `${BIOME_ICON_SPRITE_COLUMNS * BIOME_ICON_SPRITE_SIZE}px auto`,
+              backgroundPosition: `${-(iconColumn * BIOME_ICON_SPRITE_SIZE)}px ${-(iconRow * BIOME_ICON_SPRITE_SIZE)}px`,
+              backgroundRepeat: 'no-repeat',
+              imageRendering: 'pixelated',
+            };
+
+            const tileStyle: CSSProperties = {};
+            if (texturePath) {
+              const dimFactor = !isVisited && isKnown ? 0.65 : isVisited && depleted ? 0.5 : 0.22;
+              const dimLayer = `linear-gradient(rgba(8, 16, 12, ${dimFactor}), rgba(8, 16, 12, ${dimFactor}))`;
+              const oceanLayer = isOceanBiome
+                ? 'linear-gradient(to bottom, rgba(8, 16, 12, 0.0) 80%, rgba(17, 84, 154, 0.55) 100%)'
+                : '';
+              tileStyle.backgroundImage = `${dimLayer}${oceanLayer ? `, ${oceanLayer}` : ''}, url('${texturePath}')`;
+              tileStyle.backgroundSize = 'cover';
+              tileStyle.backgroundPosition = 'center';
+              tileStyle.backgroundRepeat = 'no-repeat';
+            }
 
             // Determine visual passage indicators (right and down borders)
             const hasRightPassage = getMazeNeighbors(x, y).some((n) => n.x === x + 1 && n.y === y);
@@ -83,13 +148,14 @@ export function MapPanel({
 
             // Build tile class
             let tileClass =
-              'aspect-square flex w-full h-full flex-col items-center justify-center rounded-lg text-base transition-all duration-150 relative select-none';
+              'aspect-square flex w-full h-full flex-col items-center justify-center text-base transition-all duration-150 relative select-none';
 
             if (isReachable) {
-              // Reachable via card — highlight even if hidden (sprint can dash into fog)
-              tileClass += ' border border-gp-mint/70 bg-gp-mint/15 hover:bg-gp-mint/25 cursor-pointer animate-pulse';
+              // Reachable via card — strong movement hint
+              tileClass +=
+                ' border border-cyan-200/90 bg-cyan-300/20 hover:bg-cyan-200/35 cursor-pointer shadow-[0_0_0_1px_rgba(34,211,238,0.45)]';
             } else if (isNearbyAnimal) {
-              tileClass += ' border-2 border-red-500/80 bg-red-900/30 hover:bg-red-800/50 cursor-pointer animate-pulse';
+              tileClass += ' border-2 border-red-400/90 bg-red-500/35 hover:bg-red-500/55 cursor-pointer animate-pulse shadow-[0_0_0_2px_rgba(248,113,113,0.45)]';
             } else if (!isVisited && !isKnown) {
               // Completely hidden
               tileClass += animals.length > 0
@@ -109,17 +175,24 @@ export function MapPanel({
                 : ' border border-gp-accent/20 bg-gp-bg/30 cursor-default';
             }
 
+            if (texturePath) {
+              tileClass += ' bg-center bg-cover bg-no-repeat';
+            }
+
             const hidden = !isVisited && !isKnown;
             const clickable = isMoveCard
               ? (isReachable || isNearbyAnimal || isPlayer)
               : (isNearbyAnimal || isPlayer);
+            const primaryAnimal = animals[0];
 
             return (
-              <div key={key} className="relative">
+              <div key={key} className="relative" data-testid={`map-tile-${x}-${y}`}>
                 <button
+                  data-testid={`map-panel-tile-btn-${x}-${y}`}
                   onClick={() => clickable ? onTileClick(x, y) : undefined}
                   disabled={!clickable}
                   className={tileClass}
+                  style={texturePath ? tileStyle : undefined}
                   title={hidden ? '???' : tileName}
                   aria-label={hidden ? 'Unknown tile' : `${tileName}${isPlayer ? ' (you are here)' : ''}`}
                 >
@@ -127,21 +200,42 @@ export function MapPanel({
                     <>
                       <span className="text-gp-accent/30 text-lg">?</span>
                       {animals.length > 0 && (
-                        <span className="text-[9px] leading-none opacity-50">🐾</span>
+                        <span className="text-[9px] leading-none opacity-50">⚠️</span>
                       )}
                     </>
                   ) : (
                     <>
-                      {/* Biome emoji */}
-                      <span className={isKnown && !isVisited ? 'opacity-50' : ''}>{tileEmoji}</span>
+                      {/* Biome icon from spritesheet */}
+                      <span
+                        data-testid={`map-tile-biome-icon-${x}-${y}`}
+                        className={`absolute bottom-0 left-0 scale-75 h-8 w-8 rounded-sm bg-contain ${isKnown && !isVisited && !isAttackableTile ? 'opacity-50' : ''}`}
+                        style={biomeIconStyle}
+                        title={tileEmoji}
+                        aria-hidden="true"
+                      />
 
                       {/* Player marker */}
-                      {isPlayer && <span className="text-[9px] leading-none">🧑</span>}
+                      {isPlayer && (
+                        <PlayerMarker
+                          mode={playerMode}
+                          equippedWeaponEmoji={equippedWeaponEmoji}
+                          equippedWeaponName={equippedWeaponName}
+                        />
+                      )}
 
                       {/* Animal markers — visible on any revealed tile */}
-                      {animals.length > 0 && (
-                        <span className={`text-[9px] leading-none${isKnown && !isVisited ? ' opacity-50' : ''}`}>
-                          {animals[0]!.emoji}{animals.length > 1 ? `+${animals.length - 1}` : ''}
+                  {primaryAnimal && primaryAnimal.sprite && (
+                          <span
+                            className={`inline-flex items-center gap-1 text-[9px] leading-none${isKnown && !isVisited && !isAttackableTile ? ' opacity-50' : ''}`}
+                              title={primaryAnimal.name}
+                            >
+                              <AnimalSprite
+                                name={primaryAnimal.name}
+                                emoji={primaryAnimal.emoji}
+                                sprite={primaryAnimal.sprite}
+                                className="h-6 w-6 relative z-20 scale-95"
+                              />
+                          {animals.length > 1 ? `+${animals.length - 1}` : ''}
                         </span>
                       )}
 

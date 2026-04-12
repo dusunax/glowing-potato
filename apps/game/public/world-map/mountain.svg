@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="mountainBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8b8f96"/>
+      <stop offset="100%" stop-color="#50585f"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#mountainBase)"/>
+  <g fill="#6f7580" opacity="0.85">
+    <polygon points="5,62 20,30 33,62"/>
+    <polygon points="24,62 38,27 55,62"/>
+    <polygon points="0,62 14,34 30,62"/>
+    <polygon points="28,62 47,34 62,62"/>
+  </g>
+  <g fill="#d7dde5" opacity="0.75">
+    <polygon points="13,34 19,18 25,34"/>
+    <polygon points="33,31 40,15 48,31"/>
+    <polygon points="44,33 50,17 58,33"/>
+  </g>
+  <g stroke="#3a4047" stroke-width="1.2" fill="none" opacity="0.45">
+    <line x1="2" y1="62" x2="62" y2="62"/>
+    <line x1="12" y1="62" x2="16" y2="40"/>
+    <line x1="34" y1="62" x2="31" y2="44"/>
+  </g>
+</svg>

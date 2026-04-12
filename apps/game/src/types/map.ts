@@ -22,6 +22,9 @@ export type MapBiomePreset = 'meadow' | 'mountain' | 'beach' | 'desert' | 'rock'
 export interface BiomeInfo {
   type: BiomeType;
   emoji: string;
+  texture?: string;
+  iconSpriteMatrix?: [number, number];
+  iconSpriteSheet?: 'default' | 'secondary';
   name: string;
   description: string;
   /** Item categories that receive a spawn-weight bonus here */

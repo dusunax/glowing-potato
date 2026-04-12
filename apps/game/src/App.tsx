@@ -15,11 +15,13 @@ import { DontSayIt } from './features/dont-say-it';
 import { MapPanel } from './components/panels/MapPanel';
 import { ActionCardDisplay } from './components/ui/ActionCardDisplay';
 import { Button } from '@glowing-potato/ui';
+import { AnimalSprite } from './components/ui/AnimalSprite';
 import { TIME_PERIOD_EMOJIS } from './constants/timePeriods';
 import { WEATHER_EMOJIS } from './constants/weather';
 import { getSeasonColor } from './utils/time';
 import { getItemById } from './data/items';
 import { TREASURE_TILE } from './data/map';
+import { ANIMAL_TEMPLATES_BY_NAME } from './data/animals';
 import { calculateScore } from './utils/score';
 import { tileKey } from './hooks/useMap';
 import { useLeaderboard } from './hooks/useLeaderboard';
@@ -278,6 +280,8 @@ function CollectionGame({
   const [selectedBeltSlot, setSelectedBeltSlot] = useState(0);
   const [moveCardFlash, setMoveCardFlash] = useState(false);
   const moveCardFlashTimer = useRef<number | null>(null);
+  const [playerActionState, setPlayerActionState] = useState<'idle' | 'skill' | 'discover' | 'attack'>('idle');
+  const playerActionStateTimer = useRef<number | null>(null);
 
   const seasonColorClass = getSeasonColor(conditions.season);
   const activeTabIndex = activeTab ? TABS.findIndex((tab) => tab.id === activeTab) : 0;
@@ -290,6 +294,31 @@ function CollectionGame({
     }
     return tiles;
   }, [adjacentAnimals]);
+  const triggerPlayerActionState = useCallback((nextState: 'idle' | 'skill' | 'discover' | 'attack') => {
+    if (playerActionStateTimer.current) {
+      window.clearTimeout(playerActionStateTimer.current);
+    }
+
+    setPlayerActionState(nextState);
+
+    if (nextState === 'idle') {
+      playerActionStateTimer.current = null;
+      return;
+    }
+
+    playerActionStateTimer.current = window.setTimeout(() => {
+      setPlayerActionState('idle');
+      playerActionStateTimer.current = null;
+    }, 900);
+  }, []);
+
+  const clearPlayerActionState = useCallback(() => {
+    if (playerActionStateTimer.current) {
+      window.clearTimeout(playerActionStateTimer.current);
+      playerActionStateTimer.current = null;
+    }
+    setPlayerActionState('idle');
+  }, []);
 
   function onCardClick(card: ActionCard) {
     if (isPlayerDead) return;
@@ -307,6 +336,7 @@ function CollectionGame({
       // Toggle selection — requires a map tile target
       selectCard(card);
     } else {
+      triggerPlayerActionState(isForageCard(card.type) ? 'discover' : 'skill');
       // Execute immediately
       handlePlayCard(card);
     }
@@ -318,10 +348,11 @@ function CollectionGame({
       grantTreasureReward(rewardType);
       setHasClaimedTreasureReward(true);
       setShowTreasureRewardModal(false);
+      triggerPlayerActionState('discover');
       handlePlayCard(pendingTreasureRewardCard, undefined, { skipTreasureCollect: true });
       setPendingTreasureRewardCard(null);
     },
-    [grantTreasureReward, handlePlayCard, isPlayerDead, pendingTreasureRewardCard],
+    [grantTreasureReward, handlePlayCard, isPlayerDead, pendingTreasureRewardCard, triggerPlayerActionState],
   );
 
   function onTileClick(x: number, y: number) {
@@ -339,11 +370,12 @@ function CollectionGame({
       return;
     }
 
-    const target = adjacentAnimals.find((a) => a.position.x === x && a.position.y === y);
-    if (target) {
+  const target = adjacentAnimals.find((a) => a.position.x === x && a.position.y === y);
+  if (target) {
+      triggerPlayerActionState('attack');
       handleStrike(target.id);
       return;
-    }
+  }
 
     if (!selectedCard) return;
     if (selectedCard.type === 'explore' || selectedCard.type === 'sprint') {
@@ -428,6 +460,14 @@ function CollectionGame({
     });
   }, [beltSlots, inventory]);
 
+  const equippedWeaponItem = useMemo(() => {
+    const equipped = beltSlotData[WEAPON_BELT_SLOT_INDEX];
+    if (!equipped?.itemId) return null;
+    const item = getItemById(equipped.itemId);
+    if (!item || item.category !== 'weapon') return null;
+    return item;
+  }, [beltSlotData, WEAPON_BELT_SLOT_INDEX]);
+
   const canAssignSlot = useCallback(
     (slotIndex: number, itemId: string) => {
       const stock = getQuantity(itemId);
@@ -465,6 +505,14 @@ function CollectionGame({
       return next;
     });
   }, [canAssignSlot]);
+
+  const handleAttackAnimal = useCallback(
+    (animal: { id: string }) => {
+      triggerPlayerActionState('attack');
+      handleStrike(animal.id);
+    },
+    [handleStrike, triggerPlayerActionState],
+  );
 
   const handleCraftWithAutoEquip = useCallback(
     (recipeId: string): string => {
@@ -583,8 +631,11 @@ function CollectionGame({
       if (moveCardFlashTimer.current) {
         window.clearTimeout(moveCardFlashTimer.current);
       }
+      if (playerActionStateTimer.current) {
+        window.clearTimeout(playerActionStateTimer.current);
+      }
     };
-  }, []);
+  }, [clearPlayerActionState]);
 
   useEffect(() => {
     setBeltSlots((prev) => {
@@ -680,8 +731,10 @@ function CollectionGame({
           getAnimalsAt={getAnimalsAt}
           getReachableTiles={getReachableTiles}
           nearbyAnimalTiles={nearbyAnimals}
+          equippedWeaponEmoji={equippedWeaponItem?.emoji}
+          equippedWeaponName={equippedWeaponItem?.name}
+          playerActionState={playerActionState}
         />
-
         <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-gp-mint">🎒 Belt</h3>
@@ -798,17 +851,27 @@ function CollectionGame({
                   key={`${a.id}-${a.position.x}-${a.position.y}-${index}`}
                   className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gp-bg/40 border border-red-500/20"
                 >
-                  <span>{a.emoji}</span>
+                  <div className="h-6 w-6 flex items-center justify-center">
+                    <AnimalSprite
+                      name={a.name}
+                      emoji={a.emoji}
+                      sprite={a.sprite}
+                      className="h-5 w-5 relative z-20"
+                    />
+                  </div>
                   <span className="text-xs text-gp-mint/85">
                     {getLabeledAnimalDisplayName(a.name)}
                   </span>
-                  <span className={`text-xs font-bold ${a.behavior === 'hostile' ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {a.behavior === 'hostile' ? '⚔️' : '🕊️'}
-                  </span>
+                  <span className="text-xs font-bold text-gp-mint/80">⚔️</span>
                   <span className="text-xs text-gp-mint/60">{a.hp}/{a.maxHp}HP</span>
-                  <Button size="sm" variant="ghost" onClick={() => handleStrike(a.id)} disabled={isPlayerDead}>
-                    Attack
-                  </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleAttackAnimal(a)}
+                        disabled={isPlayerDead}
+                      >
+                        Attack
+                      </Button>
                 </div>
               ))}
             </div>
@@ -905,7 +968,7 @@ function CollectionGame({
             <CondPill emoji={WEATHER_EMOJIS[conditions.weather] ?? '🌤️'} label={conditions.weather} />
             <CondPill emoji="🍃" label={conditions.season} labelClass={seasonColorClass} />
             <div className="text-xs text-gp-mint/90 px-2 py-1 rounded-lg bg-gp-bg/40 border border-gp-accent/20">
-              🗺️ Map Biome: {BIOME_PRESET_LABEL[mapBiome]}
+              Map Biome: {BIOME_PRESET_LABEL[mapBiome]}
             </div>
 
             {/* Player HP */}
@@ -1013,16 +1076,29 @@ function CollectionGame({
                         <div className="text-xs text-gp-mint/70">
                           <div className="font-semibold text-gp-mint mb-1">🐾 Animals defeated</div>
                         <div className="flex flex-wrap justify-center gap-1.5">
-                          {defeatedAnimals.map((a, index) => (
-                            <span
-                              key={`${a.name}-${a.emoji}-${a.rarity}-${index}`}
-                              className="px-2 py-0.5 rounded-full bg-gp-bg/40 border border-gp-accent/30 inline-flex items-center gap-1.5"
-                            >
-                              <span>{a.emoji}</span>
-                              <span>{getLabeledAnimalDisplayName(a.name)}</span>
-                              <span>×{a.count}</span>
-                            </span>
-                          ))}
+                          {defeatedAnimals.map((a, index) => {
+                            const template = ANIMAL_TEMPLATES_BY_NAME[a.name];
+                            const iconAnimal = {
+                              ...a,
+                              sprite: template?.sprite,
+                            };
+
+                            return (
+                              <span
+                                key={`${a.name}-${a.emoji}-${a.rarity}-${index}`}
+                                className="px-2 py-0.5 rounded-full bg-gp-bg/40 border border-gp-accent/30 inline-flex items-center gap-1.5"
+                              >
+                                <AnimalSprite
+                                  name={iconAnimal.name}
+                                  emoji={iconAnimal.emoji}
+                                  sprite={iconAnimal.sprite}
+                                  className="h-4 w-4 relative z-20"
+                                />
+                                <span>{getLabeledAnimalDisplayName(a.name)}</span>
+                                <span>×{a.count}</span>
+                              </span>
+                            );
+                          })}
                           </div>
                         </div>
                       )}

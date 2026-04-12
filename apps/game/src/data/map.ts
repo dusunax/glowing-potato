@@ -3,6 +3,8 @@
 
 import type { BiomeType, BiomeInfo, MapBiomePreset } from '../types/map';
 import type { PlayerPosition } from '../types/map';
+import biomeIconsSprite1 from '../assets/spritesheet/1-32x32.png';
+import biomeIconsSprite2 from '../assets/spritesheet/2-32x32.png';
 
 /**
  * 8×8 world map grid. Indexed as MAP_GRID[row (y)][col (x)].
@@ -28,6 +30,13 @@ export const MAP_GRID: BiomeType[][] = [
   ['forest',   'forest',   'meadow',  'lake',    'lake',    'plains',  'plains',  'cave'],
   ['beach',    'beach',    'plains',  'swamp',   'mountain', 'cave',   'cave',    'treasure'],
 ];
+
+export const BIOME_ICON_SPRITES = {
+  default: biomeIconsSprite1,
+  secondary: biomeIconsSprite2,
+} as const;
+export const BIOME_ICON_SPRITE_SIZE = 32;
+export const BIOME_ICON_SPRITE_COLUMNS = 16;
 
 export const MAP_ROWS = MAP_GRID.length;
 export const MAP_COLS = MAP_GRID[0].length;
@@ -146,6 +155,9 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   forest: {
     type: 'forest',
     emoji: '🌲',
+    iconSpriteMatrix: [1, 15],
+    iconSpriteSheet: 'secondary',
+    texture: '/world-map/forest.svg',
     name: 'Forest',
     description: 'Dense woodland teeming with flora and hidden creatures.',
     categoryBonus: ['flora', 'creature'],
@@ -153,6 +165,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   mountain: {
     type: 'mountain',
     emoji: '⛰️',
+    iconSpriteMatrix: [1, 11],
+    texture: '/world-map/mountain.svg',
     name: 'Mountain',
     description: 'Rocky peaks rich in rare minerals and crystals.',
     categoryBonus: ['mineral'],
@@ -161,6 +175,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   lake: {
     type: 'lake',
     emoji: '🏞️',
+    iconSpriteMatrix: [15, 2],
+    texture: '/world-map/lake.svg',
     name: 'Lake',
     description: 'A serene lake where aquatic creatures thrive.',
     categoryBonus: ['creature', 'mineral'],
@@ -168,6 +184,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   meadow: {
     type: 'meadow',
     emoji: '🌿',
+    iconSpriteMatrix: [26, 9],
+    texture: '/world-map/meadow.svg',
     name: 'Meadow',
     description: 'Open fields bursting with blooming flowers and insects.',
     categoryBonus: ['flora', 'creature'],
@@ -175,6 +193,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   plains: {
     type: 'plains',
     emoji: '🌾',
+    iconSpriteMatrix: [27, 15],
+    texture: '/world-map/plains.svg',
     name: 'Plains',
     description: 'Balanced lands where all types of items may appear.',
     categoryBonus: [],
@@ -182,6 +202,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   cave: {
     type: 'cave',
     emoji: '🕳️',
+    iconSpriteMatrix: [1, 7],
+    texture: '/world-map/cave.svg',
     name: 'Cave',
     description: 'Dark caverns hiding rare minerals and special finds.',
     categoryBonus: ['mineral', 'special'],
@@ -190,6 +212,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   treasure: {
     type: 'treasure',
     emoji: '📦',
+    iconSpriteMatrix: [0, 5],
+    texture: '/world-map/treasure.svg',
     name: 'Treasure Chest',
     description: 'A hidden chest at the edge of the map, keep an eye on this tile.',
     categoryBonus: [],
@@ -197,6 +221,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   village: {
     type: 'village',
     emoji: '🏡',
+    iconSpriteMatrix: [0, 15],
+    texture: '/world-map/village.svg',
     name: 'Village',
     description: 'A cozy settlement. All common goods can be found here.',
     categoryBonus: [],
@@ -204,6 +230,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   swamp: {
     type: 'swamp',
     emoji: '🌊',
+    iconSpriteMatrix: [2, 13],
+    texture: '/world-map/swamp.svg',
     name: 'Swamp',
     description: 'Murky wetlands with unusual flora and strange creatures.',
     categoryBonus: ['flora', 'creature'],
@@ -212,6 +240,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   beach: {
     type: 'beach',
     emoji: '🏖️',
+    iconSpriteMatrix: [1, 5],
+    texture: '/world-map/beach.svg',
     name: 'Beach',
     description: 'Sandy shores where special and mineral finds wash ashore.',
     categoryBonus: ['special', 'mineral'],
@@ -219,6 +249,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   desert: {
     type: 'desert',
     emoji: '🏜️',
+    iconSpriteMatrix: [5, 12],
+    texture: '/world-map/desert.svg',
     name: 'Desert',
     description: 'Dry heat and sharp winds create a harsh ecosystem.',
     categoryBonus: ['mineral', 'creature'],
@@ -227,6 +259,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   rock: {
     type: 'rock',
     emoji: '🪨',
+    iconSpriteMatrix: [1, 10],
+    texture: '/world-map/rock.svg',
     name: 'Rock',
     description: 'Jagged stone fields with dense mineral veins and armored wildlife.',
     categoryBonus: ['mineral', 'creature', 'special'],
@@ -235,6 +269,8 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
   everywhere: {
     type: 'everywhere',
     emoji: '🌍',
+    iconSpriteMatrix: [0, 0],
+    texture: '/world-map/rock.svg',
     name: 'Everywhere',
     description: 'Can appear in any biome.',
     categoryBonus: [],
