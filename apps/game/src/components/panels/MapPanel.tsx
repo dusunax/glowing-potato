@@ -1,6 +1,14 @@
 // Displays the world map with fog-of-war, maze passages, resource counters, and animals.
 
-import { MAP_COLS, MAP_ROWS, BIOME_INFO, getMazeNeighbors } from '../../data/map';
+import {
+  BIOME_ICON_SPRITE_COLUMNS,
+  BIOME_ICON_SPRITE_PATH,
+  BIOME_ICON_SPRITE_SIZE,
+  MAP_COLS,
+  MAP_ROWS,
+  BIOME_INFO,
+  getMazeNeighbors,
+} from '../../data/map';
 import { tileKey } from '../../hooks/useMap';
 import type { PlayerPosition, BiomeInfo, BiomeType } from '../../types/map';
 import type { ActionCard } from '../../types/actionCard';
@@ -86,12 +94,27 @@ export function MapPanel({
             const isNearbyAnimal = nearbyAnimalTiles.has(key);
             const shouldShowTexture = isVisited || isKnown || isPlayer;
             const texturePath = shouldShowTexture && biomeInfo.texture ? biomeInfo.texture : undefined;
-  const playerMode: PlayerActionState = isMoveCard ? 'move' : playerActionState;
+            const isOceanBiome = biome === 'lake';
+            const playerMode: PlayerActionState = isMoveCard ? 'move' : playerActionState;
+            const iconCoord = biomeInfo.iconSpriteMatrix ?? [0, 0];
+            const iconRow = iconCoord[0] ?? 0;
+            const iconColumn = iconCoord[1] ?? 0;
+            const biomeIconStyle: CSSProperties = {
+              backgroundImage: `url('${BIOME_ICON_SPRITE_PATH}')`,
+              backgroundSize: `${BIOME_ICON_SPRITE_COLUMNS * BIOME_ICON_SPRITE_SIZE}px auto`,
+              backgroundPosition: `${-(iconColumn * BIOME_ICON_SPRITE_SIZE)}px ${-(iconRow * BIOME_ICON_SPRITE_SIZE)}px`,
+              backgroundRepeat: 'no-repeat',
+              imageRendering: 'pixelated',
+            };
 
             const tileStyle: CSSProperties = {};
             if (texturePath) {
               const dimFactor = !isVisited && isKnown ? 0.65 : isVisited && depleted ? 0.5 : 0.22;
-              tileStyle.backgroundImage = `linear-gradient(rgba(8, 16, 12, ${dimFactor}), rgba(8, 16, 12, ${dimFactor})), url('${texturePath}')`;
+              const dimLayer = `linear-gradient(rgba(8, 16, 12, ${dimFactor}), rgba(8, 16, 12, ${dimFactor}))`;
+              const oceanLayer = isOceanBiome
+                ? 'linear-gradient(to bottom, rgba(8, 16, 12, 0.0) 80%, rgba(17, 84, 154, 0.55) 100%)'
+                : '';
+              tileStyle.backgroundImage = `${dimLayer}${oceanLayer ? `, ${oceanLayer}` : ''}, url('${texturePath}')`;
               tileStyle.backgroundSize = 'cover';
               tileStyle.backgroundPosition = 'center';
               tileStyle.backgroundRepeat = 'no-repeat';
@@ -158,8 +181,14 @@ export function MapPanel({
                     </>
                   ) : (
                     <>
-                      {/* Biome emoji */}
-                      <span className={`absolute left-0.5 bottom-0.5 ${isKnown && !isVisited ? 'opacity-50' : ''}`}>{tileEmoji}</span>
+                      {/* Biome icon from spritesheet */}
+                      <span
+                        data-testid={`map-tile-biome-icon-${x}-${y}`}
+                        className={`absolute bottom-0.5 left-0.5 h-8 w-8 rounded-sm bg-contain ${isKnown && !isVisited ? 'opacity-50' : ''}`}
+                        style={biomeIconStyle}
+                        title={tileEmoji}
+                        aria-hidden="true"
+                      />
 
                       {/* Player marker */}
                       {isPlayer && (

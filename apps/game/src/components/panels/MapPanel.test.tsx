@@ -2,9 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { BIOME_INFO, MAP_GRID } from '../../data/map';
 import type { ActionCard } from '../../types/actionCard';
-import type { WorldConditions } from '../../types/conditions';
 import { MapPanel } from './MapPanel';
-import type { WildAnimal } from '../../types/animal';
+import type { AnimalBehavior, WildAnimal } from '../../types/animal';
 
 describe('MapPanel', () => {
   const allTiles = new Set<string>();
@@ -25,13 +24,6 @@ describe('MapPanel', () => {
   };
 
   const currentBiome = BIOME_INFO.meadow;
-
-  const baseConditions: WorldConditions = {
-    day: 1,
-    season: 'Spring',
-    weather: 'Sunny',
-    timePeriod: 'Morning',
-  };
 
   const renderPanel = (props: {
     selectedCard: ActionCard | null;
@@ -109,12 +101,12 @@ describe('MapPanel', () => {
         id: 'a1',
         name: 'Wooly Bunny',
         emoji: '🐇',
-        behavior: 'neutral',
+        behavior: 'neutral' as AnimalBehavior,
         maxHp: 2,
         hp: 2,
         attack: 1,
         experienceReward: 0,
-        rarity: 1,
+        rarity: 1 as const,
         alive: true,
         position: { x: 1, y: 0 },
       },
@@ -152,4 +144,3 @@ describe('MapPanel', () => {
     expect(onTileClick).not.toHaveBeenCalled();
   });
 });
-
