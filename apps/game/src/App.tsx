@@ -704,6 +704,133 @@ function CollectionGame({
     return () => window.removeEventListener('keydown', handleQuickUseKeydown);
   }, [activeTab, isPlayerDead, beltSlotData, handleBeltUse]);
 
+  // ── Keyboard controls for map navigation and card play ────────────────────
+  useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (isPlayerDead) return;
+      // Only active on the game panel (activeTab === null means game is shown)
+      if (activeTab !== null && activeTab !== 'game') return;
+
+      const kbTarget = event.target as HTMLElement | null;
+      if (
+        kbTarget instanceof HTMLElement &&
+        (kbTarget.tagName.toLowerCase() === 'input' ||
+          kbTarget.tagName.toLowerCase() === 'textarea' ||
+          kbTarget.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = event.key;
+
+      // Escape: deselect card
+      if (key === 'Escape') {
+        selectCard(null);
+        return;
+      }
+
+      // Q/W/E/R: select or play action card at hand slot 0/1/2/3
+      const CARD_KEYS: Record<string, number> = { q: 0, w: 1, e: 2, r: 3 };
+      const cardIndex = CARD_KEYS[key.toLowerCase()];
+      if (cardIndex !== undefined) {
+        if (event.repeat) return;
+        event.preventDefault();
+        const card = hand[cardIndex];
+        if (!card) return;
+
+        if (card.type === 'explore' || card.type === 'sprint') {
+          selectCard(card);
+          return;
+        }
+
+        if (card.type === 'forage' || card.type === 'lucky_forage' || card.type === 'windfall') {
+          if (isTreasureTile && !hasClaimedTreasureReward && !showTreasureRewardModal && !pendingTreasureRewardCard) {
+            depleteTileResource(position.x, position.y);
+            setHasClaimedTreasureReward(true);
+            setPendingTreasureRewardCard(card);
+            setShowTreasureRewardModal(true);
+            return;
+          }
+          if (!canCollectFromCurrentTile) return;
+        }
+
+        triggerPlayerActionState(
+          card.type === 'forage' || card.type === 'lucky_forage' || card.type === 'windfall'
+            ? 'discover'
+            : 'skill',
+        );
+        handlePlayCard(card);
+        return;
+      }
+
+      // F: attack first adjacent animal
+      if (key === 'f' || key === 'F') {
+        if (adjacentAnimals.length === 0) return;
+        event.preventDefault();
+        if (event.repeat) return;
+        handleAttackAnimal(adjacentAnimals[0]!);
+        return;
+      }
+
+      // Arrow keys: map movement (auto-picks the move card)
+      let dx = 0;
+      let dy = 0;
+      if (key === 'ArrowUp') dy = -1;
+      else if (key === 'ArrowDown') dy = 1;
+      else if (key === 'ArrowLeft') dx = -1;
+      else if (key === 'ArrowRight') dx = 1;
+      else return;
+
+      event.preventDefault();
+      if (event.repeat) return;
+
+      const targetX = position.x + dx;
+      const targetY = position.y + dy;
+
+      // Attack an adjacent animal in that direction if present
+      const animalTarget = adjacentAnimals.find(
+        (a) => a.position.x === targetX && a.position.y === targetY,
+      );
+      if (animalTarget) {
+        handleAttackAnimal(animalTarget);
+        return;
+      }
+
+      // Move through the maze passage
+      if (!canMoveTo(targetX, targetY, 1)) return;
+
+      const moveCard =
+        selectedCard?.type === 'explore' || selectedCard?.type === 'sprint'
+          ? selectedCard
+          : hand.find((c) => c.type === 'explore' || c.type === 'sprint') ?? null;
+      if (!moveCard) return;
+
+      handlePlayCard(moveCard, { x: targetX, y: targetY });
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  }, [
+    isPlayerDead,
+    activeTab,
+    hand,
+    selectedCard,
+    position,
+    canMoveTo,
+    selectCard,
+    handlePlayCard,
+    handleStrike,
+    triggerPlayerActionState,
+    adjacentAnimals,
+    handleAttackAnimal,
+    isTreasureTile,
+    hasClaimedTreasureReward,
+    showTreasureRewardModal,
+    pendingTreasureRewardCard,
+    depleteTileResource,
+    canCollectFromCurrentTile,
+  ]);
+
   const emptySlotClass = 'min-h-[64px] border border-dashed border-gp-mint/55 rounded-lg';
   const emptySlotStyle = {
     background: 'linear-gradient(180deg, rgba(var(--gp-bg), 0.82) 0%, rgba(var(--gp-bg), 0.65) 100%)',
@@ -825,6 +952,7 @@ function CollectionGame({
                     onClick={() => onCardClick(card)}
                     className={isPlayerDead ? 'opacity-60' : ''}
                     style={{ zIndex: isSelected ? 30 : 10 - index }}
+                    keyboardShortcut={['Q', 'W', 'E', 'R'][index]}
                   />
                 </div>
               );
@@ -833,12 +961,17 @@ function CollectionGame({
           {isTargetingCard && (
             <div className="mt-3 flex items-center justify-center gap-3">
               <p className="text-xs text-gp-mint/70">
-                Click a highlighted tile on the map to move there
+                Click a highlighted tile on the map to move there, or use Arrow Keys
               </p>
               <Button variant="ghost" size="sm" onClick={() => selectCard(null)}>
-                Cancel
+                Cancel [Esc]
               </Button>
             </div>
+          )}
+          {!isTargetingCard && (
+            <p className="mt-2 text-[10px] text-gp-mint/40 text-center">
+              ⌨️ Q/W/E/R: cards · Arrow keys: move · F: attack · 1–7: belt
+            </p>
           )}
         </div>
 
