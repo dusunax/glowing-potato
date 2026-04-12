@@ -16,7 +16,7 @@ import {
   getMaxUnlockedSpawnLayer,
   SPAWN_LAYER_UNLOCK_COST_BY_LEVEL,
   MAX_SPAWN_REVEAL_LEVEL,
-  getSpawnableItemsByLayerCatalog,
+  getSpawnableItemsByLayer,
 } from '../utils/spawning';
 import type { GameEvent } from '../types/events';
 import type { ActionCard } from '../types/actionCard';
@@ -210,13 +210,14 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
 
   const getSpawnLayerItemCount = useCallback(
     (level: number) =>
-      getSpawnableItemsByLayerCatalog(
+      getSpawnableItemsByLayer(
         ITEMS,
+        conditions,
         scoutRevealLevel,
         level,
         currentBiomeInfo.type,
       ).length,
-    [scoutRevealLevel, currentBiomeInfo.type]
+    [conditions, scoutRevealLevel, currentBiomeInfo.type]
   );
 
   const normalizeLayer = useCallback((level: number) => {
@@ -311,8 +312,9 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
           return;
         }
 
-        const allLayerItems = getSpawnableItemsByLayerCatalog(
+        const allLayerItems = getSpawnableItemsByLayer(
           ITEMS,
+          conditions,
           scoutRevealLevel,
           normalizedLevel,
           currentBiomeInfo.type,
@@ -324,6 +326,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
         const targetItem = sortedLayerItems[currentUnlocked];
 
         setScoutPoints((prev) => prev - 1);
+        setScoutUnlockLevel((prev) => Math.max(prev, normalizedLevel));
         setSpawnLayerUnlockedItemCounts((prev) => {
           const current = Math.max(0, prev[normalizedLevel] ?? 0);
           const next = Math.min(availableCount, current + 1);
@@ -351,6 +354,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       normalizeLayer,
       scoutPoints,
       scoutRevealLevel,
+      conditions,
       pushEvent,
       spawnLayerUnlockedItemCounts,
     ]

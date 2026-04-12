@@ -45,10 +45,16 @@ export function useItemSpawn({
       const spawnable = selectedSpawnLayer <= scoutRevealLevel
         ? getSpawnableItemsByLayer(ITEMS, conditions, scoutRevealLevel, selectedSpawnLayer, biomeInfo.type)
         : getSpawnableItemsUpToLayer(ITEMS, conditions, scoutRevealLevel, biomeInfo.type);
+      if (spawnable.length === 0) {
+        return 'Nothing to collect right now. Try a different time or weather.';
+      }
 
       const unlockedCount = selectedSpawnLayer === 1
         ? spawnable.length
-        : Math.max(0, unlockedSpawnLayerItemCounts[selectedSpawnLayer] ?? 0);
+        : Math.min(
+            spawnable.length,
+            Math.max(0, unlockedSpawnLayerItemCounts[selectedSpawnLayer] ?? 0),
+          );
 
       if (selectedSpawnLayer > 1 && unlockedCount <= 0) {
         return `No unlocked spawnable items at Lv.${selectedSpawnLayer} yet. Use scout points to unlock one first.`;

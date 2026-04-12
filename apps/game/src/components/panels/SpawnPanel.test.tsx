@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { WorldConditions } from '../../types/conditions';
 import type { BiomeType } from '../../types/map';
-import { getSpawnableItemsByLayerCatalog } from '../../utils/spawning';
+import { getSpawnableItemsByLayer } from '../../utils/spawning';
 import { ITEMS } from '../../data/items';
 import { SpawnPanel } from './SpawnPanel';
 
@@ -112,7 +112,7 @@ describe('SpawnPanel', () => {
 
   it('uses layer-item unlock when layer is open but not all items are unlocked', () => {
     const scoutRevealLevel = 3;
-    const layerItems = getSpawnableItemsByLayerCatalog(ITEMS, scoutRevealLevel, 2, meadow);
+    const layerItems = getSpawnableItemsByLayer(ITEMS, baseConditions, scoutRevealLevel, 2, meadow);
 
     if (layerItems.length === 0) {
       expect(screen.queryByTestId('spawn-layer-2-unlock-item-btn')).toBeNull();

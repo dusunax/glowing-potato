@@ -6,7 +6,7 @@ import { Badge, CardTitle } from '@glowing-potato/ui';
 import {
   getSpawnableItems,
   getBaseSpawnableItems,
-  getSpawnableItemsByLayerCatalog,
+  getSpawnableItemsByLayer,
   MAX_SPAWN_REVEAL_LEVEL,
   SPAWN_LAYER_UNLOCK_COST_BY_LEVEL,
 } from '../../utils/spawning';
@@ -76,8 +76,8 @@ export function SpawnPanel({
     ...Array.from({ length: MAX_SPAWN_REVEAL_LEVEL }, (_, index) => {
       const level = index + 1;
       const isUnlocked = level <= unlockedLayer;
-      const unlockedNow = getSpawnableItemsByLayerCatalog(ITEMS, level, level, biomeType);
-      const unlockedBefore = level > 1 ? getSpawnableItemsByLayerCatalog(ITEMS, level - 1, level - 1, biomeType) : [];
+      const unlockedNow = getSpawnableItemsByLayer(ITEMS, conditions, level, level, biomeType);
+      const unlockedBefore = level > 1 ? getSpawnableItemsByLayer(ITEMS, conditions, level - 1, level - 1, biomeType) : [];
       const beforeIds = new Set(unlockedBefore.map((item) => item.id));
       const levelItems = isUnlocked ? unlockedNow.filter((item) => !beforeIds.has(item.id)) : [];
       const label = TREE_LEVEL_LABELS[level] ?? { title: `Layer ${level}`, subtitle: 'Expanding zone' };
