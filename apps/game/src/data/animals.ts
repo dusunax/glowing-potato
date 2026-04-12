@@ -4,9 +4,9 @@
 import type { BiomeType, MapBiomePreset, PlayerPosition } from '../types/map';
 import type { AnimalTemplate, WildAnimal } from '../types/animal';
 import { MAP_GRID, MAP_COLS, MAP_ROWS, getMazeNeighbors } from './map';
-import { ANIMAL_VISUALS } from './characterVisuals';
+import { ANIMAL_VISUALS, type AnimalVisualType } from './characterVisuals';
 
-const ANIMAL_TEMPLATES = {
+const ANIMAL_TEMPLATES: Record<AnimalVisualType, AnimalTemplate> = {
   wolf: {
     name: 'Skunk',
     emoji: '🐺',
@@ -117,7 +117,7 @@ const ANIMAL_TEMPLATES = {
     rarity: 5,
     experienceReward: 24,
   },
-} satisfies Record<string, AnimalTemplate>;
+};
 
 export const ANIMAL_TEMPLATES_BY_NAME = Object.fromEntries(
   Object.values(ANIMAL_TEMPLATES).map((template) => [template.name, template]),

@@ -13,7 +13,20 @@ import foxSprite from '../assets/characters/animations/Slow Turtle/SlowTurtle.gi
 import owlSprite from '../assets/characters/animations/Coral Crab/CoralCrab.gif';
 import bearSprite from '../assets/characters/animations/Toxic Hound/ToxicHound.gif';
 
-export const ANIMAL_VISUALS = {
+export type AnimalVisualType =
+  | 'wolf'
+  | 'bear'
+  | 'wildBoar'
+  | 'deer'
+  | 'rabbit'
+  | 'fox'
+  | 'owl'
+  | 'stoneCrawler'
+  | 'rockCrawler'
+  | 'skeleton'
+  | 'bloodSkeleton';
+
+export const ANIMAL_VISUALS: Record<AnimalVisualType, AnimalSpriteSource> = {
   deer: { kind: 'gif', src: deerSprite },
   rabbit: { kind: 'gif', src: rabbitSprite },
   fox: { kind: 'gif', src: foxSprite },
@@ -25,4 +38,4 @@ export const ANIMAL_VISUALS = {
   rockCrawler: { kind: 'gif', src: rockCrawlerSprite },
   skeleton: { kind: 'gif', src: skeletonSprite },
   bloodSkeleton: { kind: 'gif', src: bloodSkeletonSprite },
-} satisfies Record<string, AnimalSpriteSource>;
+};
