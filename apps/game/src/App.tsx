@@ -968,7 +968,7 @@ function CollectionGame({
             <CondPill emoji={WEATHER_EMOJIS[conditions.weather] ?? '🌤️'} label={conditions.weather} />
             <CondPill emoji="🍃" label={conditions.season} labelClass={seasonColorClass} />
             <div className="text-xs text-gp-mint/90 px-2 py-1 rounded-lg bg-gp-bg/40 border border-gp-accent/20">
-              🗺️ Map Biome: {BIOME_PRESET_LABEL[mapBiome]}
+              Map Biome: {BIOME_PRESET_LABEL[mapBiome]}
             </div>
 
             {/* Player HP */}

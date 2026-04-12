@@ -63,13 +63,30 @@ export function MapPanel({
     ? getReachableTiles(position, moveRange)
     : new Set<string>();
 
+  const worldMapTitleIcon: [number, number] = [0, 7];
+  const worldMapTitleIconSheet: keyof typeof BIOME_ICON_SPRITES = 'default';
+  const worldMapTitleIconPath = BIOME_ICON_SPRITES[worldMapTitleIconSheet];
+  const worldMapTitleIconStyle: CSSProperties = {
+    backgroundImage: `url('${worldMapTitleIconPath}')`,
+    backgroundSize: `${BIOME_ICON_SPRITE_COLUMNS * BIOME_ICON_SPRITE_SIZE}px auto`,
+    backgroundPosition: `${-(worldMapTitleIcon[1] * BIOME_ICON_SPRITE_SIZE)}px ${-(worldMapTitleIcon[0] * BIOME_ICON_SPRITE_SIZE)}px`,
+    backgroundRepeat: 'no-repeat',
+    imageRendering: 'pixelated',
+  };
   return (
     <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <CardTitle>🗺️ World Map</CardTitle>
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-gp-mint">
-          <span>{currentBiomeInfo.emoji}</span>
-          <span>{currentBiomeInfo.name}</span>
+      <div className="flex items-end justify-between mb-3">
+        <div className="flex items-center">
+          <span
+            className="inline-block shrink-0 rounded-sm bg-contain w-8 h-8 scale-75"
+            style={worldMapTitleIconStyle}
+            aria-hidden="true"
+            title="World map icon"
+          />
+          <CardTitle>World Map</CardTitle>
+        </div>
+        <div className="text-sm font-semibold text-gp-mint/50">
+          <span>@{currentBiomeInfo.name}</span>
         </div>
       </div>
 
@@ -180,7 +197,7 @@ export function MapPanel({
                     <>
                       <span className="text-gp-accent/30 text-lg">?</span>
                       {animals.length > 0 && (
-                        <span className="text-[9px] leading-none opacity-50">🐾</span>
+                        <span className="text-[9px] leading-none opacity-50">⚠️</span>
                       )}
                     </>
                   ) : (
