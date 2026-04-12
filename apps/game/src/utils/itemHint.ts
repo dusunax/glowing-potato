@@ -1,5 +1,6 @@
 import { BIOME_INFO } from '../data/map';
 import type { Item } from '../types/items';
+import { isSpawnableItem } from './spawning';
 
 export function getItemSpawnHint(item: Item): string {
   const { biomes, seasons, weathers, timePeriods } = item.spawnConditions;
@@ -9,6 +10,10 @@ export function getItemSpawnHint(item: Item): string {
     return 'Dropped by animals';
   }
 
+  if (!isSpawnableItem(item)) {
+    return 'Crafting material only';
+  }
+
   const hasSpawnConstraint =
     (biomes?.length ?? 0) > 0 ||
     (seasons?.length ?? 0) > 0 ||
@@ -16,7 +21,7 @@ export function getItemSpawnHint(item: Item): string {
     (timePeriods?.length ?? 0) > 0;
 
   if (!hasSpawnConstraint) {
-    return 'Crafting material only';
+    return 'Found everywhere';
   }
 
   if (biomes && biomes.length > 0) {

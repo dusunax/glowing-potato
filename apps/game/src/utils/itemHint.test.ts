@@ -54,6 +54,17 @@ describe('getItemSpawnHint', () => {
     },
   };
 
+  const wildRoot: Item = {
+    id: 'wild_root',
+    name: 'Wild Root',
+    description: 'Naturally gathered everywhere',
+    emoji: '🌿',
+    rarity: 1,
+    category: 'flora',
+    tags: ['craft-base', 'base-resource'],
+    spawnConditions: {},
+  };
+
   it('describes loot items', () => {
     expect(getItemSpawnHint(lootOnly)).toBe('Dropped by animals');
   });
@@ -68,5 +79,9 @@ describe('getItemSpawnHint', () => {
 
   it('describes specific weather/time conditions', () => {
     expect(getItemSpawnHint(seasonal)).toBe('Weather: Rainy, Cloudy | Time: Afternoon');
+  });
+
+  it('describes unconstrained natural resources as found everywhere', () => {
+    expect(getItemSpawnHint(wildRoot)).toBe('Found everywhere');
   });
 });

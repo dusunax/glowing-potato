@@ -6,7 +6,7 @@ import { Badge, CardTitle } from '@glowing-potato/ui';
 import {
   getSpawnableItems,
   getBaseSpawnableItems,
-  getSpawnableItemsByLayer,
+  getSpawnableItemsByLayerForUnlock,
   MAX_SPAWN_REVEAL_LEVEL,
   SPAWN_LAYER_UNLOCK_COST_BY_LEVEL,
 } from '../../utils/spawning';
@@ -18,6 +18,7 @@ interface SpawnPanelProps {
   biomeType: BiomeType;
   scoutPoints: number;
   scoutRevealLevel: number;
+  scoutUnlockLevel: number;
   unlockedSpawnLayerItemCounts: Record<number, number>;
   selectedSpawnLayer: number;
   onUnlockSpawnLayerItem: (layer: number) => void;
@@ -61,6 +62,7 @@ export function SpawnPanel({
   biomeType,
   scoutPoints,
   scoutRevealLevel,
+  scoutUnlockLevel,
   unlockedSpawnLayerItemCounts,
   onUnlockSpawnLayerItem,
   onUnlockSpawnLayer,
@@ -70,14 +72,14 @@ export function SpawnPanel({
   const revealLevel = Math.min(Math.max(1, scoutRevealLevel), MAX_SPAWN_REVEAL_LEVEL);
   const baseSpawnable = getBaseSpawnableItems(ITEMS);
   const spawnable = [...baseSpawnable, ...getSpawnableItems(ITEMS, conditions, revealLevel, biomeType)];
-  const unlockedLayer = revealLevel;
-  const activeScoutLevel = Math.max(0, scoutPoints);
+  const unlockedLayer = Math.min(Math.max(1, scoutUnlockLevel), MAX_SPAWN_REVEAL_LEVEL);
+  const activeScoutLevel = Math.max(0, Number.isFinite(scoutPoints) ? scoutPoints : 0);
   const treeNodes: SpawnTreeNode[] = [
     ...Array.from({ length: MAX_SPAWN_REVEAL_LEVEL }, (_, index) => {
       const level = index + 1;
       const isUnlocked = level <= unlockedLayer;
-      const unlockedNow = getSpawnableItemsByLayer(ITEMS, conditions, level, level, biomeType);
-      const unlockedBefore = level > 1 ? getSpawnableItemsByLayer(ITEMS, conditions, level - 1, level - 1, biomeType) : [];
+      const unlockedNow = getSpawnableItemsByLayerForUnlock(ITEMS, level, level, biomeType);
+      const unlockedBefore = level > 1 ? getSpawnableItemsByLayerForUnlock(ITEMS, level - 1, level - 1, biomeType) : [];
       const beforeIds = new Set(unlockedBefore.map((item) => item.id));
       const levelItems = isUnlocked ? unlockedNow.filter((item) => !beforeIds.has(item.id)) : [];
       const label = TREE_LEVEL_LABELS[level] ?? { title: `Layer ${level}`, subtitle: 'Expanding zone' };
@@ -108,27 +110,26 @@ export function SpawnPanel({
       </p>
       <div className="space-y-3 overflow-y-auto">
         {treeNodes.map((node, index) => {
-                    const isLocked = !node.unlocked;
-                    const isSelected = selectedSpawnLayer === node.level;
-      const requiredPoints = SPAWN_LAYER_UNLOCK_COST_BY_LEVEL[node.level] ?? 0;
-      const previousLevel = Math.max(0, node.level - 1);
-      const previousCost = SPAWN_LAYER_UNLOCK_COST_BY_LEVEL[previousLevel] ?? 0;
-      const unlockCost = requiredPoints - previousCost;
-      const canUnlockNode = node.level === unlockedLayer + 1;
-      const isAffordable = unlockCost <= scoutPoints;
-      const unlockedCount = Math.max(
-        0,
-        unlockedSpawnLayerItemCounts[node.level] ?? (node.level === 1 ? node.items.length : 0),
-      );
-      const displayCount = Math.min(node.items.length, unlockedCount);
-      const nodeText = isLocked ? `Need ${requiredPoints} points` : `${displayCount}/${node.items.length} unlocked`;
-      const unlockDisabled = isLocked && (!canUnlockNode || !isAffordable);
-      const canUnlockItem = !isLocked && displayCount < node.items.length;
-      const canUnlockItemNow = canUnlockItem && scoutPoints >= 1;
-                    const cardClass = isSelected
-                      ? 'border-gp-mint/80 bg-gp-mint/10'
-                      : 'border-gp-accent/30 bg-gp-bg/30';
-
+          const isLocked = !node.unlocked;
+          const isSelected = selectedSpawnLayer === node.level;
+          const requiredPoints = SPAWN_LAYER_UNLOCK_COST_BY_LEVEL[node.level] ?? 0;
+          const previousLevel = Math.max(0, node.level - 1);
+          const previousCost = SPAWN_LAYER_UNLOCK_COST_BY_LEVEL[previousLevel] ?? 0;
+          const unlockCost = requiredPoints - previousCost;
+          const canUnlockNode = node.level === unlockedLayer + 1;
+          const isAffordable = unlockCost <= activeScoutLevel;
+          const unlockedCount = Math.max(
+            0,
+            unlockedSpawnLayerItemCounts[node.level] ?? (node.level === 1 ? node.items.length : 0),
+          );
+          const displayCount = Math.min(node.items.length, unlockedCount);
+          const nodeText = isLocked ? `Need ${requiredPoints} points` : `${displayCount}/${node.items.length} unlocked`;
+          const unlockDisabled = isLocked && (!canUnlockNode || !isAffordable);
+          const canUnlockItem = !isLocked && displayCount < node.items.length;
+          const canUnlockItemNow = canUnlockItem && activeScoutLevel >= 1;
+          const cardClass = isSelected
+            ? 'border-gp-mint/80 bg-gp-mint/10'
+            : 'border-gp-accent/30 bg-gp-bg/30';
           return (
             <div key={`spawn-tree-${node.level}`} className="relative" data-testid={`spawn-layer-${node.level}`}>
               <div className="flex items-start gap-3">
@@ -171,25 +172,63 @@ export function SpawnPanel({
                         <span className="text-sm font-semibold text-gp-mint shrink-0">
                           {node.title} (Lv.{node.level})
                         </span>
-                        {isLocked ? (
-                          <button
-                            type="button"
-                            data-testid={`spawn-layer-${node.level}-unlock-layer-btn`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (!unlockDisabled) {
-                                onUnlockSpawnLayer(node.level);
-                              }
-                            }}
-                            disabled={unlockDisabled}
-                            className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border transition shrink-0 ${unlockDisabled ? 'border-gp-accent/20 text-gp-mint/40 cursor-not-allowed' : 'border-emerald-400/80 text-emerald-200 hover:bg-emerald-900/30 cursor-pointer'}`}
+                      </div>
+                      <span className="text-[11px] text-gp-mint/60">{nodeText}</span>
+                    </div>
+                    <p className="text-[11px] text-gp-mint/60 mt-0.5">{node.subtitle}</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {isLocked ? (
+                      <>
+                        <button
+                          type="button"
+                          data-testid={`spawn-layer-${node.level}-unlock-layer-btn`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (!unlockDisabled) {
+                              onUnlockSpawnLayer(node.level);
+                            }
+                          }}
+                          disabled={unlockDisabled}
+                            className={`${EMPTY_SLOT_CLASS} flex items-center justify-center gap-1 text-[11px] text-gp-mint/70 px-3 py-2 ${
+                              unlockDisabled
+                                ? 'border-gp-accent/20 text-gp-mint/40 cursor-not-allowed'
+                                : 'border-emerald-300/90 bg-emerald-900/35 text-emerald-100 font-semibold hover:bg-emerald-900/45 cursor-pointer ring-1 ring-emerald-300/60 shadow-[0_0_14px_-4px_rgba(16,185,129,0.85)]'
+                            }`}
+                            style={EMPTY_SLOT_STYLE}
                           >
-                            <span className="text-[10px]">🔒</span>
-                            {canUnlockNode
-                              ? `Unlock for ${unlockCost} point${unlockCost === 1 ? '' : 's'}`
-                              : `Unlock Lv.${previousLevel + 1} first`}
-                          </button>
-                        ) : canUnlockItem ? (
+                            <span className="text-sm">🔒</span>
+                          <span>
+                            {!canUnlockNode
+                              ? `Unlock Lv.${node.level - 1} first`
+                              : isAffordable
+                              ? `Unlock Lv.${node.level}`
+                              : `Need ${unlockCost} points to unlock Lv.${node.level}`}
+                          </span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {node.items.length === 0 ? (
+                          <div className={`${EMPTY_SLOT_CLASS} col-span-full`} style={EMPTY_SLOT_STYLE} />
+                        ) : (
+                          node.items.slice(0, displayCount).map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-2 bg-gp-bg/30 rounded-lg p-2 border border-gp-accent/20"
+                            >
+                              <span className="text-xl">{item.emoji}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-semibold text-gp-mint truncate">{item.name}</div>
+                              </div>
+                              <Badge
+                                label={RARITY_LABELS[item.rarity] ?? '⭐'}
+                                variant={RARITY_BADGE_MAP[item.rarity] ?? 'muted'}
+                              />
+                            </div>
+                          ))
+                        )}
+                        {canUnlockItem ? (
                           <button
                             type="button"
                             data-testid={`spawn-layer-${node.level}-unlock-item-btn`}
@@ -200,57 +239,19 @@ export function SpawnPanel({
                               }
                             }}
                             disabled={!canUnlockItemNow}
-                            className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border transition shrink-0 ${
+                            className={`inline-flex items-center justify-start gap-2 text-xs px-3 py-2 rounded-lg border transition-all duration-200 ${
                               canUnlockItemNow
-                                ? 'border-emerald-400/80 text-emerald-200 hover:bg-emerald-900/30 cursor-pointer'
-                                : 'border-gp-accent/20 text-gp-mint/40 cursor-not-allowed'
+                                ? 'border-emerald-400/80 text-emerald-200 bg-gp-bg/30 hover:bg-emerald-900/30 cursor-pointer border border-emerald-300/75'
+                                : 'border-gp-accent text-gp-mint cursor-not-allowed'
                             }`}
                           >
-                            <span className="text-[10px]">✨</span>
-                            Unlock 1 item (1 pt)
+                            <span className="text-sm">✨</span>
+                            Scout for Item (1pt)
                           </button>
                         ) : null}
-                      </div>
-                      <span className="text-[11px] text-gp-mint/60">{nodeText}</span>
-                    </div>
-                    <p className="text-[11px] text-gp-mint/60 mt-0.5">{node.subtitle}</p>
+                      </>
+                    )}
                   </div>
-
-                      {isLocked ? (
-                    <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {Array.from({ length: 2 }).map((_, emptyIndex) => (
-                          <div
-                            key={`locked-${node.level}-${emptyIndex}`}
-                            className={EMPTY_SLOT_CLASS}
-                            style={EMPTY_SLOT_STYLE}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {node.items.length === 0 ? (
-                        <div className={`${EMPTY_SLOT_CLASS} col-span-full`} style={EMPTY_SLOT_STYLE} />
-                      ) : (
-                        node.items.slice(0, displayCount).map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center gap-2 bg-gp-bg/30 rounded-lg p-2 border border-gp-accent/20"
-                          >
-                            <span className="text-xl">{item.emoji}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold text-gp-mint truncate">{item.name}</div>
-                            </div>
-                            <Badge
-                              label={RARITY_LABELS[item.rarity] ?? '⭐'}
-                              variant={RARITY_BADGE_MAP[item.rarity] ?? 'muted'}
-                            />
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

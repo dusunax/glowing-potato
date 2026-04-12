@@ -19,7 +19,7 @@ export const SPAWN_LAYER_UNLOCK_COST_BY_LEVEL: Record<number, number> = {
 
 const CRAFT_RESULT_ITEM_IDS = new Set(RECIPES.map((recipe) => recipe.result.itemId));
 
-function isNeverForaged(item: Item): boolean {
+export function isNeverForaged(item: Item): boolean {
   const { seasons, weathers, timePeriods, biomes } = item.spawnConditions;
   return (
     (seasons !== undefined && seasons.length === 0) ||
@@ -29,8 +29,12 @@ function isNeverForaged(item: Item): boolean {
   );
 }
 
-function shouldSkipItem(item: Item): boolean {
+export function shouldSkipItemFromSpawn(item: Item): boolean {
   return item.category === 'weapon' || CRAFT_RESULT_ITEM_IDS.has(item.id);
+}
+
+export function isSpawnableItem(item: Item): boolean {
+  return !isNeverForaged(item) && !shouldSkipItemFromSpawn(item);
 }
 
 export function getMaxUnlockedSpawnLayer(scoutPoints: number): number {
@@ -59,7 +63,7 @@ export function getSpawnableItems(
 ): Item[] {
   const maxRarity = getMaxRarityForRevealLevel(scoutRevealLevel);
   const strictMatches = items.filter((item) => {
-    if (shouldSkipItem(item)) return false;
+    if (shouldSkipItemFromSpawn(item)) return false;
     if (item.id === 'mushroom') {
       if (!biomeType) return false;
       const isFoggy = conditions.weather === 'Foggy';
@@ -89,7 +93,7 @@ export function getSpawnableItems(
   if (strictMatches.length > 0) return strictMatches;
 
   return items.filter((item) => {
-    if (shouldSkipItem(item) || isNeverForaged(item)) return false;
+    if (shouldSkipItemFromSpawn(item) || isNeverForaged(item)) return false;
     if (item.rarity > maxRarity) return false;
     return true;
   });
@@ -98,7 +102,7 @@ export function getSpawnableItems(
 export function getBaseSpawnableItems(items: Item[]): Item[] {
   return items.filter(
     (item) =>
-      !shouldSkipItem(item) &&
+      !shouldSkipItemFromSpawn(item) &&
       item.tags?.includes('base-resource'),
   );
 }
@@ -120,9 +124,39 @@ export function getSpawnableItemsByLayer(
   const requestedLayer = Math.max(0, Math.min(Math.floor(selectedLayer), MAX_SPAWN_REVEAL_LEVEL));
   if (requestedLayer > revealLevel) return [];
   if (requestedLayer === 0) return getBaseSpawnableItems(items);
-  const currentLayerItems = getSpawnableItems(items, conditions, requestedLayer, biomeType);
-  const previousLayerItems =
+  const strictCurrentLayerItems = getSpawnableItems(items, conditions, requestedLayer, biomeType);
+  const strictPreviousLayerItems =
     requestedLayer > 1 ? getSpawnableItems(items, conditions, requestedLayer - 1, biomeType) : [];
+  const fallbackNeeded = strictCurrentLayerItems.length === 0 && strictPreviousLayerItems.length === 0;
+
+  const currentLayerItems = fallbackNeeded
+    ? getSpawnableItemsByLayerCatalog(items, requestedLayer, requestedLayer, biomeType)
+    : strictCurrentLayerItems;
+  const previousLayerItems = fallbackNeeded
+    ? (
+        requestedLayer > 1
+          ? getSpawnableItemsByLayerCatalog(items, requestedLayer - 1, requestedLayer - 1, biomeType)
+          : []
+      )
+    : strictPreviousLayerItems;
+  const previousIds = new Set(previousLayerItems.map((item) => item.id));
+  return currentLayerItems.filter((item) => !previousIds.has(item.id));
+}
+
+export function getSpawnableItemsByLayerForUnlock(
+  items: Item[],
+  scoutRevealLevel: number = MAX_SPAWN_REVEAL_LEVEL,
+  selectedLayer: number = scoutRevealLevel,
+  biomeType?: BiomeType,
+): Item[] {
+  const revealLevel = Math.max(1, Math.min(Math.floor(scoutRevealLevel), MAX_SPAWN_REVEAL_LEVEL));
+  const normalizedLayer = Math.max(1, Math.min(Math.floor(selectedLayer), MAX_SPAWN_REVEAL_LEVEL));
+  if (normalizedLayer > revealLevel) return [];
+
+  const currentLayerItems = getSpawnableItemsByLayerCatalog(items, revealLevel, normalizedLayer, biomeType);
+  const previousLayerItems =
+    normalizedLayer > 1 ? getSpawnableItemsByLayerCatalog(items, revealLevel, normalizedLayer - 1, biomeType) : [];
+
   const previousIds = new Set(previousLayerItems.map((item) => item.id));
   return currentLayerItems.filter((item) => !previousIds.has(item.id));
 }
@@ -138,7 +172,7 @@ export function getSpawnableItemsByLayerCatalog(
   if (requestedLayer > revealLevel) return [];
 
   const currentLayerItems = items.filter((item) => {
-    if (shouldSkipItem(item)) return false;
+    if (shouldSkipItemFromSpawn(item)) return false;
     if (item.rarity > getMaxRarityForRevealLevel(requestedLayer)) return false;
     if (
       item.spawnConditions.biomes &&
@@ -156,7 +190,7 @@ export function getSpawnableItemsByLayerCatalog(
     currentLayerItems.length > 0
       ? currentLayerItems
       : items.filter((item) => {
-          if (shouldSkipItem(item) || isNeverForaged(item)) return false;
+          if (shouldSkipItemFromSpawn(item) || isNeverForaged(item)) return false;
           if (item.rarity > getMaxRarityForRevealLevel(requestedLayer)) return false;
           return true;
         });
@@ -164,7 +198,7 @@ export function getSpawnableItemsByLayerCatalog(
   const previousLayerItems =
     requestedLayer > 1
       ? items.filter((item) => {
-          if (shouldSkipItem(item) || isNeverForaged(item)) return false;
+          if (shouldSkipItemFromSpawn(item) || isNeverForaged(item)) return false;
           if (item.rarity > getMaxRarityForRevealLevel(requestedLayer - 1)) return false;
           return true;
         })

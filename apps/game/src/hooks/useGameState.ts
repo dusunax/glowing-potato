@@ -16,7 +16,7 @@ import {
   getMaxUnlockedSpawnLayer,
   SPAWN_LAYER_UNLOCK_COST_BY_LEVEL,
   MAX_SPAWN_REVEAL_LEVEL,
-  getSpawnableItemsByLayer,
+  getSpawnableItemsByLayerForUnlock,
 } from '../utils/spawning';
 import type { GameEvent } from '../types/events';
 import type { ActionCard } from '../types/actionCard';
@@ -210,14 +210,13 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
 
   const getSpawnLayerItemCount = useCallback(
     (level: number) =>
-      getSpawnableItemsByLayer(
+      getSpawnableItemsByLayerForUnlock(
         ITEMS,
-        conditions,
         scoutRevealLevel,
         level,
         currentBiomeInfo.type,
       ).length,
-    [conditions, scoutRevealLevel, currentBiomeInfo.type]
+    [scoutRevealLevel, currentBiomeInfo.type]
   );
 
   const normalizeLayer = useCallback((level: number) => {
@@ -249,15 +248,15 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
     consumeTileResource: () => consumeTileResource(position.x, position.y),
   });
   useEffect(() => {
-    setSelectedSpawnLayer((prev) => Math.min(prev, scoutRevealLevel));
-  }, [scoutRevealLevel]);
+    setSelectedSpawnLayer((prev) => Math.min(prev, scoutUnlockLevel));
+  }, [scoutUnlockLevel]);
   const { canCraft, craft, recipes } = useCrafting({ getQuantity, removeItem, addItem, markDiscovered });
 
   const unlockSpawnLayer = useCallback(
     (targetLevel: number) => {
       if (!Number.isFinite(targetLevel)) return;
       const normalizedLevel = Math.max(1, Math.min(Math.floor(targetLevel), MAX_SPAWN_REVEAL_LEVEL));
-      const currentMax = Math.max(scoutRevealLevel, 1);
+      const currentMax = Math.max(scoutUnlockLevel, 1);
       if (normalizedLevel <= currentMax) {
         pushEvent(`Spawn layer Lv.${normalizedLevel} is already unlocked.`, 'info');
         return;
@@ -290,13 +289,13 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       });
       pushEvent(`🗝️ Spawnable layer Lv.${normalizedLevel} unlocked.`, 'success');
     },
-    [scoutPoints, scoutRevealLevel, setSelectedSpawnLayer, pushEvent]
+    [scoutPoints, scoutUnlockLevel, setSelectedSpawnLayer, pushEvent]
   );
 
   const unlockNextSpawnItemAtLayer = useCallback(
     (targetLevel: number) => {
       const normalizedLevel = normalizeLayer(targetLevel);
-      if (normalizedLevel <= scoutRevealLevel) {
+      if (normalizedLevel <= scoutUnlockLevel) {
         const availableCount = getSpawnLayerItemCount(normalizedLevel);
         if (availableCount === 0) {
           pushEvent(`No items available at Lv.${normalizedLevel} yet.`, 'warning');
@@ -312,9 +311,8 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
           return;
         }
 
-        const allLayerItems = getSpawnableItemsByLayer(
+        const allLayerItems = getSpawnableItemsByLayerForUnlock(
           ITEMS,
-          conditions,
           scoutRevealLevel,
           normalizedLevel,
           currentBiomeInfo.type,
@@ -354,7 +352,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       normalizeLayer,
       scoutPoints,
       scoutRevealLevel,
-      conditions,
+      scoutUnlockLevel,
       pushEvent,
       spawnLayerUnlockedItemCounts,
     ]
@@ -381,6 +379,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       const isFood = tags.includes('food');
       const isEdible = isFood || tags.includes('cooking');
       const gainedXp = item.xpGain ?? 0;
+      const hasHealing = (isPotion || isEdible) && item.healingAmount !== undefined;
       const isXpConsumable = gainedXp > 0;
       const isConsumable = isPotion || isEdible || isXpConsumable;
 
@@ -389,45 +388,54 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
         return false;
       }
 
-      const maxRestore = maxPlayerHp;
-      const heal = isPotion || isEdible ? Math.max(0, item.healingAmount ?? 0) : 0;
+      const maxRestore = Math.max(1, maxHpRef.current);
+      const heal = hasHealing ? Math.max(0, item.healingAmount ?? 0) : 0;
       const canHeal = heal > 0;
 
       if (!canHeal && !isXpConsumable) {
         pushEvent('This item has no effect to consume.', 'warning');
         return false;
       }
-      if (canHeal) {
-        if (playerHp >= maxRestore) {
-          pushEvent('HP is already full.', 'warning');
-          return false;
+      if (canHeal && playerHpRef.current >= maxRestore) {
+        pushEvent('HP is already full.', 'warning');
+        if (isXpConsumable) {
+          gainExperience(gainedXp);
+          pushEvent(`[ITEM][XP] Gained ${gainedXp} XP from ${item.name}.`, 'success');
         }
+        return isXpConsumable;
       }
 
-      if (!removeItem(itemId, 1)) return false;
+      if (!removeItem(itemId, 1)) {
+        pushEvent('No item left to consume.', 'warning');
+        return false;
+      }
 
-      let appliedHp = 0;
-      let nextPlayerHp = 0;
-      setPlayerHp((prevHp) => {
-        const prev = Math.min(prevHp, maxRestore);
-        const next = Math.min(maxRestore, prev + heal);
-        appliedHp = next - prev;
-        nextPlayerHp = next;
-        return next;
-      });
-
-      if (isXpConsumable) {
+      if (!canHeal && isXpConsumable) {
         gainExperience(gainedXp);
       }
 
-      const actionVerb = isPotion ? 'drank' : 'ate';
-      const kind = isPotion ? '🧪' : '🍽️';
-      const hpBefore = Math.max(0, nextPlayerHp - appliedHp);
-      if (isPotion || isFood) {
+      const beforePlayerHp = canHeal ? Math.min(playerHpRef.current, maxRestore) : playerHpRef.current;
+      const appliedHp = canHeal ? Math.max(0, Math.min(maxRestore, beforePlayerHp + heal) - beforePlayerHp) : 0;
+      const nextPlayerHp = beforePlayerHp + appliedHp;
+
+      if (canHeal) {
+        setPlayerHp((prevHp) => {
+          const prev = Math.min(prevHp, maxRestore);
+          const next = Math.min(maxRestore, prev + heal);
+          return next;
+        });
+      }
+
+      if (isPotion || isEdible) {
+        const actionVerb = isPotion ? 'drank' : 'ate';
+        const kind = isPotion ? '🧪' : '🍽️';
+        const hpBefore = Math.max(0, nextPlayerHp - appliedHp);
         pushEvent(`[ITEM][USE] ${kind} You ${actionVerb} ${item.name}.`, 'success');
-        pushEvent(`[ITEM][USE] HP ${hpBefore}/${maxRestore} → ${nextPlayerHp}/${maxRestore} (+${appliedHp} HP).`, 'success');
+        if (canHeal) {
+          pushEvent(`[ITEM][USE] HP ${hpBefore}/${maxRestore} → ${nextPlayerHp}/${maxRestore} (+${appliedHp} HP).`, 'success');
+        }
       } else {
-        pushEvent(`[ITEM][USE] ${kind} You used ${item.name}.`, 'success');
+        pushEvent(`[ITEM][USE] 🥄 You used ${item.name}.`, 'success');
       }
 
       if (isXpConsumable) {
@@ -435,7 +443,7 @@ export function useGameState(startBiomePreset: MapBiomePreset = 'meadow') {
       }
       return true;
     },
-    [gainExperience, isPlayerDead, maxPlayerHp, playerHp, pushEvent, removeItem]
+    [gainExperience, isPlayerDead, pushEvent, removeItem]
   );
 
   const grantTreasureReward = useCallback(

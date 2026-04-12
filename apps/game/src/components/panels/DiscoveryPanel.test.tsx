@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { DiscoveryPanel } from './DiscoveryPanel';
 import { ITEMS } from '../../data/items';
+import { getItemSpawnHint } from '../../utils/itemHint';
 
 describe('DiscoveryPanel', () => {
   it('marks discovered and undiscovered items with state attributes', () => {
@@ -29,5 +30,17 @@ describe('DiscoveryPanel', () => {
 
     const itemNoNodes = ITEMS.map((item) => screen.getByTestId(`discovery-item-no-${item.id}`));
     expect(itemNoNodes).toHaveLength(ITEMS.length);
+  });
+
+  it('uses shared spawn hint source for found item tooltips', () => {
+    const discovered = new Set(['wild_root']);
+    render(<DiscoveryPanel discovered={discovered} />);
+
+    const discoveredItem = screen.getByTestId('discovery-item-wild_root');
+    const wildRootItem = ITEMS.find((item) => item.id === 'wild_root');
+    const expectedHint = getItemSpawnHint(wildRootItem!);
+
+    expect(discoveredItem.getAttribute('data-state')).toBe('found');
+    expect(within(discoveredItem).getByText(expectedHint)).toBeTruthy();
   });
 });

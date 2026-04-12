@@ -71,8 +71,7 @@ export function useItemSpawn({
       if (!item) return 'Nothing to collect right now. Try a different time or weather.';
       addItem(item.id);
       markDiscovered(item.id);
-      const depletedNote = remaining === 0 ? ' (tile now exhausted)' : '';
-      return `You found a ${item.emoji} ${item.name}!${depletedNote}`;
+      return `You found a ${item.emoji} ${item.name}!`;
     },
     [biomeInfo, conditions, markDiscovered, scoutRevealLevel, selectedSpawnLayer, consumeTileResource, addItem, unlockedSpawnLayerItemCounts]
   );

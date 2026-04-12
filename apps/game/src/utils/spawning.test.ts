@@ -6,6 +6,8 @@ import {
   getMaxUnlockedSpawnLayer,
   getSpawnableItems,
   getSpawnableItemsByLayerCatalog,
+  getSpawnableItemsByLayer,
+  getSpawnableItemsByLayerForUnlock,
   pickRandomItem,
   pickRandomItemLucky,
   pickRandomItemWithBiome,
@@ -138,6 +140,52 @@ describe('spawning utilities', () => {
     expect(layer1.map((item) => item.id).sort()).toEqual(['r1']);
     expect(layer2.map((item) => item.id).sort()).toEqual(['r2']);
     expect(layer2.some((item) => item.id === 'r1')).toBe(false);
+  });
+
+  it('calculates unlockable layer items independently from transient weather/time conditions', () => {
+    const layeredItems: Item[] = [
+      {
+        id: 'layer-1-basic',
+        name: 'Evergreen Moss',
+        description: 'Base root ingredient.',
+        emoji: '🌿',
+        rarity: 1,
+        category: 'flora',
+        spawnConditions: {},
+      },
+      {
+        id: 'layer-2-always',
+        name: 'Cold Bloom',
+        description: 'An advanced bloom available across weather.',
+        emoji: '❄️',
+        rarity: 2,
+        category: 'flora',
+        spawnConditions: {},
+      },
+      {
+        id: 'layer-2-seasonal',
+        name: 'Summer Bloom',
+        description: 'A seasonal variation for layer two.',
+        emoji: '☀️',
+        rarity: 2,
+        category: 'flora',
+        spawnConditions: {
+          seasons: ['Summer'],
+        },
+      },
+    ];
+
+    const now: WorldConditions = {
+      season: 'Winter',
+      weather: 'Snowy',
+      timePeriod: 'Night',
+      day: 4,
+    };
+    const transientLayer2 = getSpawnableItemsByLayer(layeredItems, now, 4, 2, 'cave');
+    const stableLayer2 = getSpawnableItemsByLayerForUnlock(layeredItems, 4, 2, 'cave');
+
+    expect(transientLayer2).toHaveLength(1);
+    expect(stableLayer2).toHaveLength(2);
   });
 
   it('returns a null when no candidates are provided', () => {

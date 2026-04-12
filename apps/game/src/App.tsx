@@ -155,6 +155,7 @@ function CollectionGame({
     animals,
     deathCause,
     scoutRevealLevel,
+    scoutUnlockLevel,
     scoutPoints,
     spawnLayerUnlockedItemCounts,
     unlockSpawnLayer,
@@ -1132,6 +1133,7 @@ function CollectionGame({
                       biomeType={currentBiomeInfo.type}
                       scoutPoints={scoutPoints}
                       scoutRevealLevel={scoutRevealLevel}
+                      scoutUnlockLevel={scoutUnlockLevel}
                       unlockedSpawnLayerItemCounts={spawnLayerUnlockedItemCounts}
                       onUnlockSpawnLayerItem={unlockNextSpawnItemAtLayer}
                       onUnlockSpawnLayer={unlockSpawnLayer}
