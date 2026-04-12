@@ -46,6 +46,7 @@ export function MapPanel({
   mapGrid,
   currentBiomeInfo,
   isTreasureRewardClaimed = false,
+  canMoveTo,
   visitedTiles,
   knownTiles,
   getTileResources,
@@ -102,7 +103,8 @@ export function MapPanel({
             const isVisited = visitedTiles.has(key);
             const isKnown = knownTiles.has(key);
             const animals = getAnimalsAt(x, y);
-            const isReachable = reachable.has(key) && animals.length === 0;
+            const moveTarget = isMoveCard && (reachable.has(key) || canMoveTo(x, y, moveRange));
+            const isReachable = moveTarget && animals.length === 0;
             const biomeInfo = BIOME_INFO[biome];
             const isTreasureTile = biome === 'treasure';
             const tileEmoji = isTreasureTile && isTreasureRewardClaimed ? '📭' : biomeInfo.emoji;
@@ -149,8 +151,9 @@ export function MapPanel({
               'aspect-square flex w-full h-full flex-col items-center justify-center text-base transition-all duration-150 relative select-none';
 
             if (isReachable) {
-              // Reachable via card — highlight even if hidden (sprint can dash into fog)
-              tileClass += ' border border-gp-mint/70 bg-gp-mint/15 hover:bg-gp-mint/25 cursor-pointer animate-pulse';
+              // Reachable via card — strong movement hint
+              tileClass +=
+                ' border border-cyan-200/90 bg-cyan-300/20 hover:bg-cyan-200/35 cursor-pointer shadow-[0_0_0_1px_rgba(34,211,238,0.45)]';
             } else if (isNearbyAnimal) {
               tileClass += ' border-2 border-red-400/90 bg-red-500/35 hover:bg-red-500/55 cursor-pointer animate-pulse shadow-[0_0_0_2px_rgba(248,113,113,0.45)]';
             } else if (!isVisited && !isKnown) {
@@ -221,7 +224,7 @@ export function MapPanel({
                       )}
 
                       {/* Animal markers — visible on any revealed tile */}
-                      {primaryAnimal && primaryAnimal.sprite && (
+                  {primaryAnimal && primaryAnimal.sprite && (
                           <span
                             className={`inline-flex items-center gap-1 text-[9px] leading-none${isKnown && !isVisited && !isAttackableTile ? ' opacity-50' : ''}`}
                               title={primaryAnimal.name}
