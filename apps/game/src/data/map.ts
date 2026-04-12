@@ -3,7 +3,8 @@
 
 import type { BiomeType, BiomeInfo, MapBiomePreset } from '../types/map';
 import type { PlayerPosition } from '../types/map';
-import biomeIconsSprite from '../assets/spritesheet/32x32.png';
+import biomeIconsSprite1 from '../assets/spritesheet/1-32x32.png';
+import biomeIconsSprite2 from '../assets/spritesheet/2-32x32.png';
 
 /**
  * 8×8 world map grid. Indexed as MAP_GRID[row (y)][col (x)].
@@ -30,7 +31,10 @@ export const MAP_GRID: BiomeType[][] = [
   ['beach',    'beach',    'plains',  'swamp',   'mountain', 'cave',   'cave',    'treasure'],
 ];
 
-export const BIOME_ICON_SPRITE_PATH = biomeIconsSprite;
+export const BIOME_ICON_SPRITES = {
+  default: biomeIconsSprite1,
+  secondary: biomeIconsSprite2,
+} as const;
 export const BIOME_ICON_SPRITE_SIZE = 32;
 export const BIOME_ICON_SPRITE_COLUMNS = 16;
 
@@ -152,6 +156,7 @@ export const BIOME_INFO: Record<BiomeType, BiomeInfo> = {
     type: 'forest',
     emoji: '🌲',
     iconSpriteMatrix: [1, 15],
+    iconSpriteSheet: 'secondary',
     texture: '/world-map/forest.svg',
     name: 'Forest',
     description: 'Dense woodland teeming with flora and hidden creatures.',

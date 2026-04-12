@@ -24,6 +24,7 @@ export interface BiomeInfo {
   emoji: string;
   texture?: string;
   iconSpriteMatrix?: [number, number];
+  iconSpriteSheet?: 'default' | 'secondary';
   name: string;
   description: string;
   /** Item categories that receive a spawn-weight bonus here */

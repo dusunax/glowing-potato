@@ -15,11 +15,13 @@ import { DontSayIt } from './features/dont-say-it';
 import { MapPanel } from './components/panels/MapPanel';
 import { ActionCardDisplay } from './components/ui/ActionCardDisplay';
 import { Button } from '@glowing-potato/ui';
+import { AnimalSprite } from './components/ui/AnimalSprite';
 import { TIME_PERIOD_EMOJIS } from './constants/timePeriods';
 import { WEATHER_EMOJIS } from './constants/weather';
 import { getSeasonColor } from './utils/time';
 import { getItemById } from './data/items';
 import { TREASURE_TILE } from './data/map';
+import { ANIMAL_TEMPLATES_BY_NAME } from './data/animals';
 import { calculateScore } from './utils/score';
 import { tileKey } from './hooks/useMap';
 import { useLeaderboard } from './hooks/useLeaderboard';
@@ -292,7 +294,6 @@ function CollectionGame({
     }
     return tiles;
   }, [adjacentAnimals]);
-
   const triggerPlayerActionState = useCallback((nextState: 'idle' | 'skill' | 'discover' | 'attack') => {
     if (playerActionStateTimer.current) {
       window.clearTimeout(playerActionStateTimer.current);
@@ -734,7 +735,6 @@ function CollectionGame({
           equippedWeaponName={equippedWeaponItem?.name}
           playerActionState={playerActionState}
         />
-
         <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-gp-mint">🎒 Belt</h3>
@@ -851,7 +851,14 @@ function CollectionGame({
                   key={`${a.id}-${a.position.x}-${a.position.y}-${index}`}
                   className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gp-bg/40 border border-red-500/20"
                 >
-                  <span>{a.emoji}</span>
+                  <div className="h-6 w-6 flex items-center justify-center">
+                    <AnimalSprite
+                      name={a.name}
+                      emoji={a.emoji}
+                      sprite={a.sprite}
+                      className="h-5 w-5 relative z-20"
+                    />
+                  </div>
                   <span className="text-xs text-gp-mint/85">
                     {getLabeledAnimalDisplayName(a.name)}
                   </span>
@@ -1069,16 +1076,29 @@ function CollectionGame({
                         <div className="text-xs text-gp-mint/70">
                           <div className="font-semibold text-gp-mint mb-1">🐾 Animals defeated</div>
                         <div className="flex flex-wrap justify-center gap-1.5">
-                          {defeatedAnimals.map((a, index) => (
-                            <span
-                              key={`${a.name}-${a.emoji}-${a.rarity}-${index}`}
-                              className="px-2 py-0.5 rounded-full bg-gp-bg/40 border border-gp-accent/30 inline-flex items-center gap-1.5"
-                            >
-                              <span>{a.emoji}</span>
-                              <span>{getLabeledAnimalDisplayName(a.name)}</span>
-                              <span>×{a.count}</span>
-                            </span>
-                          ))}
+                          {defeatedAnimals.map((a, index) => {
+                            const template = ANIMAL_TEMPLATES_BY_NAME[a.name];
+                            const iconAnimal = {
+                              ...a,
+                              sprite: template?.sprite,
+                            };
+
+                            return (
+                              <span
+                                key={`${a.name}-${a.emoji}-${a.rarity}-${index}`}
+                                className="px-2 py-0.5 rounded-full bg-gp-bg/40 border border-gp-accent/30 inline-flex items-center gap-1.5"
+                              >
+                                <AnimalSprite
+                                  name={iconAnimal.name}
+                                  emoji={iconAnimal.emoji}
+                                  sprite={iconAnimal.sprite}
+                                  className="h-4 w-4 relative z-20"
+                                />
+                                <span>{getLabeledAnimalDisplayName(a.name)}</span>
+                                <span>×{a.count}</span>
+                              </span>
+                            );
+                          })}
                           </div>
                         </div>
                       )}

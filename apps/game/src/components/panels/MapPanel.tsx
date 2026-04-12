@@ -2,7 +2,7 @@
 
 import {
   BIOME_ICON_SPRITE_COLUMNS,
-  BIOME_ICON_SPRITE_PATH,
+  BIOME_ICON_SPRITES,
   BIOME_ICON_SPRITE_SIZE,
   MAP_COLS,
   MAP_ROWS,
@@ -16,6 +16,7 @@ import type { WildAnimal } from '../../types/animal';
 import type { CSSProperties } from 'react';
 import { CardTitle } from '@glowing-potato/ui';
 import PlayerMarker, { type PlayerActionState } from './PlayerMarker';
+import { AnimalSprite } from '../ui/AnimalSprite';
 
 interface MapPanelProps {
   position: PlayerPosition;
@@ -96,11 +97,13 @@ export function MapPanel({
             const texturePath = shouldShowTexture && biomeInfo.texture ? biomeInfo.texture : undefined;
             const isOceanBiome = biome === 'lake';
             const playerMode: PlayerActionState = isMoveCard ? 'move' : playerActionState;
+            const isAttackableTile = isNearbyAnimal;
             const iconCoord = biomeInfo.iconSpriteMatrix ?? [0, 0];
             const iconRow = iconCoord[0] ?? 0;
             const iconColumn = iconCoord[1] ?? 0;
+            const iconSpritePath = BIOME_ICON_SPRITES[biomeInfo.iconSpriteSheet ?? 'default'];
             const biomeIconStyle: CSSProperties = {
-              backgroundImage: `url('${BIOME_ICON_SPRITE_PATH}')`,
+              backgroundImage: `url('${iconSpritePath}')`,
               backgroundSize: `${BIOME_ICON_SPRITE_COLUMNS * BIOME_ICON_SPRITE_SIZE}px auto`,
               backgroundPosition: `${-(iconColumn * BIOME_ICON_SPRITE_SIZE)}px ${-(iconRow * BIOME_ICON_SPRITE_SIZE)}px`,
               backgroundRepeat: 'no-repeat',
@@ -132,7 +135,7 @@ export function MapPanel({
               // Reachable via card — highlight even if hidden (sprint can dash into fog)
               tileClass += ' border border-gp-mint/70 bg-gp-mint/15 hover:bg-gp-mint/25 cursor-pointer animate-pulse';
             } else if (isNearbyAnimal) {
-              tileClass += ' border-2 border-red-500/80 bg-red-900/30 hover:bg-red-800/50 cursor-pointer animate-pulse';
+              tileClass += ' border-2 border-red-400/90 bg-red-500/35 hover:bg-red-500/55 cursor-pointer animate-pulse shadow-[0_0_0_2px_rgba(248,113,113,0.45)]';
             } else if (!isVisited && !isKnown) {
               // Completely hidden
               tileClass += animals.length > 0
@@ -160,6 +163,7 @@ export function MapPanel({
             const clickable = isMoveCard
               ? (isReachable || isNearbyAnimal || isPlayer)
               : (isNearbyAnimal || isPlayer);
+            const primaryAnimal = animals[0];
 
             return (
               <div key={key} className="relative" data-testid={`map-tile-${x}-${y}`}>
@@ -184,7 +188,7 @@ export function MapPanel({
                       {/* Biome icon from spritesheet */}
                       <span
                         data-testid={`map-tile-biome-icon-${x}-${y}`}
-                        className={`absolute bottom-0.5 left-0.5 h-8 w-8 rounded-sm bg-contain ${isKnown && !isVisited ? 'opacity-50' : ''}`}
+                        className={`absolute bottom-0 left-0 scale-75 h-8 w-8 rounded-sm bg-contain ${isKnown && !isVisited && !isAttackableTile ? 'opacity-50' : ''}`}
                         style={biomeIconStyle}
                         title={tileEmoji}
                         aria-hidden="true"
@@ -200,9 +204,22 @@ export function MapPanel({
                       )}
 
                       {/* Animal markers — visible on any revealed tile */}
-                      {animals.length > 0 && (
-                        <span className={`text-[9px] leading-none${isKnown && !isVisited ? ' opacity-50' : ''}`}>
-                          {animals[0]!.emoji}{animals.length > 1 ? `+${animals.length - 1}` : ''}
+                          {primaryAnimal && (
+                          <span
+                          className={`inline-flex items-center gap-1 text-[9px] leading-none${isKnown && !isVisited && !isAttackableTile ? ' opacity-50' : ''}`}
+                              title={primaryAnimal.name}
+                            >
+                              {primaryAnimal.sprite ? (
+                                <AnimalSprite
+                                  name={primaryAnimal.name}
+                                  emoji={primaryAnimal.emoji}
+                                  sprite={primaryAnimal.sprite}
+                                  className="h-6 w-6 relative z-20 scale-95"
+                                />
+                              ) : (
+                                <span>{primaryAnimal.emoji}</span>
+                              )}
+                          {animals.length > 1 ? `+${animals.length - 1}` : ''}
                         </span>
                       )}
 

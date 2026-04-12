@@ -4,9 +4,38 @@ import type { ItemRarity } from './items';
 
 export type AnimalBehavior = 'hostile' | 'neutral';
 
+export interface AnimalSpriteFrameSource {
+  kind: 'frames';
+  frames: string[];
+  frameCount?: number;
+  frameDurationMs?: number;
+}
+
+export interface AnimalSpriteGifSource {
+  kind: 'gif';
+  src: string;
+}
+
+export interface AnimalSpriteSheetSource {
+  kind: 'spriteSheet';
+  src: string;
+  frameWidth: number;
+  frameHeight: number;
+  columns: number;
+  rows: number;
+  row?: number;
+  frameIndexes?: number[];
+  frameCount?: number;
+  frameDurationMs?: number;
+}
+
+export type AnimalSpriteSource = string | AnimalSpriteGifSource | AnimalSpriteFrameSource | AnimalSpriteSheetSource;
+
 export interface AnimalTemplate {
   name: string;
   emoji: string;
+  /** Optional sprite image URL (loaded from characters assets). */
+  sprite?: AnimalSpriteSource;
   behavior: AnimalBehavior;
   maxHp: number;
   /** Damage dealt to player when attacking */
