@@ -75,10 +75,12 @@ export function AnimalSprite({ name, emoji, sprite, className }: AnimalSpritePro
   const initialSource = resolveSpriteSource(sprite);
   const frameSequence = useMemo(() => getSpriteSheetFrameSequence(sprite), [sprite]);
   const [frameIndex, setFrameIndex] = useState(0);
+  const [imageFailed, setImageFailed] = useState(false);
   const hasFrames = frameSequence.length > 1 || frames.length > 1 || frameCount > 1;
 
   useEffect(() => {
     setFrameIndex(0);
+    setImageFailed(false);
   }, [sprite]);
 
   useEffect(() => {
@@ -127,12 +129,12 @@ export function AnimalSprite({ name, emoji, sprite, className }: AnimalSpritePro
   }
 
   if (!sprite) {
-    return <span className={className ? `leading-none ${className}` : 'leading-none text-sm'}>{emoji}</span>;
+    return null;
   }
 
   const totalFrames = frameCount || frames.length || 1;
   const src = hasFrames ? frames[frameIndex % totalFrames] : initialSource;
-  if (!src) return null;
+  if (!src || imageFailed) return null;
 
   return (
     <img
@@ -141,6 +143,9 @@ export function AnimalSprite({ name, emoji, sprite, className }: AnimalSpritePro
       className={`object-contain rounded-sm ${className || ''}`.trim()}
       aria-hidden="true"
       data-animal-emoji={emoji}
+      onError={() => {
+        setImageFailed(true);
+      }}
     />
   );
 }

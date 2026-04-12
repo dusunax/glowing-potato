@@ -221,21 +221,17 @@ export function MapPanel({
                       )}
 
                       {/* Animal markers — visible on any revealed tile */}
-                          {primaryAnimal && (
+                      {primaryAnimal && primaryAnimal.sprite && (
                           <span
-                          className={`inline-flex items-center gap-1 text-[9px] leading-none${isKnown && !isVisited && !isAttackableTile ? ' opacity-50' : ''}`}
+                            className={`inline-flex items-center gap-1 text-[9px] leading-none${isKnown && !isVisited && !isAttackableTile ? ' opacity-50' : ''}`}
                               title={primaryAnimal.name}
                             >
-                              {primaryAnimal.sprite ? (
-                                <AnimalSprite
-                                  name={primaryAnimal.name}
-                                  emoji={primaryAnimal.emoji}
-                                  sprite={primaryAnimal.sprite}
-                                  className="h-6 w-6 relative z-20 scale-95"
-                                />
-                              ) : (
-                                <span>{primaryAnimal.emoji}</span>
-                              )}
+                              <AnimalSprite
+                                name={primaryAnimal.name}
+                                emoji={primaryAnimal.emoji}
+                                sprite={primaryAnimal.sprite}
+                                className="h-6 w-6 relative z-20 scale-95"
+                              />
                           {animals.length > 1 ? `+${animals.length - 1}` : ''}
                         </span>
                       )}
