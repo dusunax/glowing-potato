@@ -21,18 +21,20 @@ export function useInventory() {
   }, []);
 
   const removeItem = useCallback((itemId: ItemId, qty = 1): boolean => {
-    let success = false;
-    setInventory((prev) => {
-      const slot = prev.find((s) => s.itemId === itemId);
-      if (!slot || slot.quantity < qty) return prev;
-      success = true;
-      const next = prev
+    if (qty <= 0) return false;
+
+    const slot = inventory.find((s) => s.itemId === itemId);
+    if (!slot || slot.quantity < qty) {
+      return false;
+    }
+
+    setInventory((prev) =>
+      prev
         .map((s) => (s.itemId === itemId ? { ...s, quantity: s.quantity - qty } : s))
-        .filter((s) => s.quantity > 0);
-      return next;
-    });
-    return success;
-  }, []);
+        .filter((s) => s.quantity > 0),
+    );
+    return true;
+  }, [inventory]);
 
   const getQuantity = useCallback(
     (itemId: ItemId) => inventory.find((s) => s.itemId === itemId)?.quantity ?? 0,

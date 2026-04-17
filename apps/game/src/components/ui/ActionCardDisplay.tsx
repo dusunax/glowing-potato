@@ -13,6 +13,7 @@ interface ActionCardDisplayProps {
   onClick: () => void;
   className?: string;
   style?: CSSProperties;
+  keyboardShortcut?: string;
 }
 
 import type { ActionCardType } from '../../types/actionCard';
@@ -56,6 +57,7 @@ export function ActionCardDisplay({
   onClick,
   className = '',
   style,
+  keyboardShortcut,
 }: ActionCardDisplayProps) {
   const theme = TYPE_THEME[card.type];
   const badgeVariant = RARITY_BADGE[card.rarity] ?? 'muted';
@@ -87,6 +89,11 @@ export function ActionCardDisplay({
         aria-pressed={isSelected}
         >
         <span className="text-3xl text-left">{card.emoji}</span>
+        {keyboardShortcut && (
+          <span className="absolute top-2 right-2 text-[10px] font-bold text-gp-mint/60 bg-gp-bg/50 border border-gp-mint/25 rounded px-1 leading-tight select-none pointer-events-none">
+            {keyboardShortcut}
+          </span>
+        )}
         <div className="flex-1">
           {/* font-semibold text-gp-mint on gp-surface: ~5.5:1 ✓ */}
           <div className="font-semibold text-gp-mint text-sm leading-tight text-left">{card.name}</div>

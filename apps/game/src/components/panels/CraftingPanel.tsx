@@ -13,9 +13,9 @@ interface CraftingPanelProps {
 
 export function CraftingPanel({ recipes, canCraft, onCraft, getQuantity }: CraftingPanelProps) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col min-h-0 h-full">
       <CardTitle className="mb-3">⚗️ Crafting</CardTitle>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto min-h-0 max-h-[calc(100vh-16rem)]">
         {recipes.map((recipe) => (
           <RecipeCard
             key={recipe.id}

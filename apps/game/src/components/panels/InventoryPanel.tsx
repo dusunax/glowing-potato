@@ -30,6 +30,12 @@ export function InventoryPanel({
     background: 'linear-gradient(180deg, rgba(var(--gp-bg), 0.82) 0%, rgba(var(--gp-bg), 0.65) 100%)',
     boxShadow: 'inset 0 0 0 1px rgba(var(--gp-accent), 0.25)',
   };
+  const BELT_KEY_LABELS: Record<number, string> = {
+    0: '⚔️',
+    1: 'X',
+    2: 'C',
+    3: 'V',
+  };
   const MIN_SLOTS = 8;
   const slots = Math.max(MIN_SLOTS, inventory.length);
   const selectedSlotItem = beltSlots[selectedBeltSlot];
@@ -44,7 +50,7 @@ export function InventoryPanel({
           {beltSlots.map((itemId, index) => {
             const item = itemId ? getItemById(itemId) : null;
             const isSelected = index === selectedBeltSlot;
-            const slotLabel = index === 0 ? 'W' : `${index}`;
+            const slotLabel = BELT_KEY_LABELS[index] ?? '';
             if (!item) {
               return (
                 <button
@@ -55,7 +61,7 @@ export function InventoryPanel({
                   className={`relative w-full min-h-12 rounded-lg border transition-all ${isSelected ? 'ring-2 ring-gp-mint/80 border-gp-mint bg-gp-mint/15 shadow-[0_0_0_2px_rgba(16,185,129,0.25)]' : 'border-gp-accent/30 bg-gp-bg/30 hover:border-gp-accent/70'}`}
                 >
                   <div className={`h-full ${isSelected ? 'ring-1 ring-inset ring-gp-mint/50 bg-gp-mint/5' : ''}`}>
-                    <div className={`${EMPTY_SLOT_CLASS} h-full`} style={EMPTY_SLOT_STYLE} />
+                  <div className={`${EMPTY_SLOT_CLASS} h-full`} style={EMPTY_SLOT_STYLE} />
                   </div>
                   <span className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">{slotLabel}</span>
                 </button>
@@ -69,7 +75,7 @@ export function InventoryPanel({
                   onClick={() => onSelectBeltSlot(index)}
                 className={`relative min-h-12 rounded-lg border transition-colors ${isSelected ? 'border-gp-mint bg-gp-mint/20 ring-2 ring-gp-mint/70' : 'border-gp-accent/30 bg-gp-bg/40 hover:border-gp-accent/70 flex flex-col'} ${itemId ? 'text-gp-mint' : 'text-gp-mint/60'}`}
               >
-                <div className="text-xs mb-1 absolute text-left px-2 pt-1 top-0">{index === 0 ? 'W' : `${index}`}</div>
+                <div className="absolute left-1.5 top-1 text-[10px] font-semibold text-gp-mint/70">{slotLabel}</div>
                 <div className="text-3xl pt-1 leading-none text-center flex-1 min-h-0 flex justify-center items-center">{item?.emoji ?? '▢'}</div>
               </button>
             );
@@ -89,10 +95,13 @@ export function InventoryPanel({
                 <div
                   key={`empty-${index}`}
                   data-testid={`inventory-empty-slot-${index}`}
-                  className={`${EMPTY_SLOT_CLASS} bg-gp-bg/10 flex items-center justify-center text-[11px] text-gp-mint/70 font-semibold uppercase tracking-wide`}
+                  className={`${EMPTY_SLOT_CLASS} bg-gp-bg/10 flex items-center justify-center`}
                   style={EMPTY_SLOT_STYLE}
                 >
-                  Empty
+                  <div className="h-full w-full flex flex-col items-center justify-center gap-1 text-gp-mint/35">
+                    <span className="text-sm opacity-80">⬡</span>
+                    <span className="h-1.5 w-10 rounded-full bg-gp-accent/20" />
+                  </div>
                 </div>
               );
             }

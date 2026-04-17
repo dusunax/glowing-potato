@@ -22,6 +22,8 @@ interface MapPanelProps {
   position: PlayerPosition;
   selectedCard: ActionCard | null;
   showPlayerMoveHint?: boolean;
+  showArrowMoveHint?: boolean;
+  showFirstMoveHint?: boolean;
   onTileClick: (x: number, y: number) => void;
   mapGrid: BiomeType[][];
   currentBiomeInfo: BiomeInfo;
@@ -36,12 +38,15 @@ interface MapPanelProps {
   equippedWeaponEmoji?: string;
   equippedWeaponName?: string;
   playerActionState?: PlayerActionState;
+  keyboardMoveCursor?: { x: number; y: number } | null;
 }
 
 export function MapPanel({
   position,
   selectedCard,
   showPlayerMoveHint = false,
+  showArrowMoveHint = false,
+  showFirstMoveHint = false,
   onTileClick,
   mapGrid,
   currentBiomeInfo,
@@ -56,12 +61,15 @@ export function MapPanel({
   equippedWeaponEmoji,
   equippedWeaponName,
   playerActionState = 'idle',
+  keyboardMoveCursor = null,
 }: MapPanelProps) {
   const isMoveCard = selectedCard?.type === 'explore' || selectedCard?.type === 'sprint';
   const moveRange = selectedCard?.moveRange ?? 1;
 
   const reachable = isMoveCard
-    ? getReachableTiles(position, moveRange)
+    ? keyboardMoveCursor
+      ? getReachableTiles(keyboardMoveCursor, 1)
+      : getReachableTiles(position, moveRange)
     : new Set<string>();
 
   const worldMapTitleIcon: [number, number] = [0, 7];
@@ -92,10 +100,11 @@ export function MapPanel({
       </div>
 
       {/* World grid */}
-      <div
-        className="grid gap-0.5 mb-3"
-        style={{ gridTemplateColumns: `repeat(${mapGrid[0]?.length ?? MAP_COLS}, 1fr)` }}
-      >
+      <div className="relative">
+        <div
+          className="grid gap-0.5 mb-3"
+          style={{ gridTemplateColumns: `repeat(${mapGrid[0]?.length ?? MAP_COLS}, 1fr)` }}
+        >
         {mapGrid.map((row, y) =>
           row.map((biome, x) => {
             const key = tileKey(x, y);
@@ -103,7 +112,11 @@ export function MapPanel({
             const isVisited = visitedTiles.has(key);
             const isKnown = knownTiles.has(key);
             const animals = getAnimalsAt(x, y);
-            const moveTarget = isMoveCard && (reachable.has(key) || canMoveTo(x, y, moveRange));
+            const moveTarget = isMoveCard && (
+              keyboardMoveCursor
+                ? reachable.has(key)
+                : (reachable.has(key) || canMoveTo(x, y, moveRange))
+            );
             const isReachable = moveTarget && animals.length === 0;
             const biomeInfo = BIOME_INFO[biome];
             const isTreasureTile = biome === 'treasure';
@@ -112,6 +125,7 @@ export function MapPanel({
             const resources = getTileResources(x, y);
             const depleted = resources === 0;
             const isNearbyAnimal = nearbyAnimalTiles.has(key);
+            const isKeyboardCursor = keyboardMoveCursor !== null && keyboardMoveCursor.x === x && keyboardMoveCursor.y === y;
             const shouldShowTexture = isVisited || isKnown || isPlayer;
             const texturePath = shouldShowTexture && biomeInfo.texture ? biomeInfo.texture : undefined;
             const isOceanBiome = biome === 'lake';
@@ -145,12 +159,38 @@ export function MapPanel({
             // Determine visual passage indicators (right and down borders)
             const hasRightPassage = getMazeNeighbors(x, y).some((n) => n.x === x + 1 && n.y === y);
             const hasDownPassage = getMazeNeighbors(x, y).some((n) => n.x === x && n.y === y + 1);
+            const isAdjacentToPlayer = Math.abs(position.x - x) + Math.abs(position.y - y) === 1;
+            const showAdjacentMoveHint = showFirstMoveHint && isAdjacentToPlayer && canMoveTo(x, y, 1);
+            const initialMoveArrow =
+              x === position.x && y === position.y - 1
+                ? '↑'
+                : x === position.x && y === position.y + 1
+                  ? '↓'
+                  : y === position.y && x === position.x - 1
+                    ? '←'
+                    : y === position.y && x === position.x + 1
+                      ? '→'
+                      : '';
+            const firstMoveArrowClass =
+              initialMoveArrow === '↑'
+                ? 'gp-first-move-arrow-bounce-up'
+                : initialMoveArrow === '↓'
+                  ? 'gp-first-move-arrow-bounce-down'
+                  : initialMoveArrow === '←'
+                    ? 'gp-first-move-arrow-bounce-left'
+                    : initialMoveArrow === '→'
+                      ? 'gp-first-move-arrow-bounce-right'
+                      : '';
 
             // Build tile class
             let tileClass =
               'aspect-square flex w-full h-full flex-col items-center justify-center text-base transition-all duration-150 relative select-none';
 
-            if (isReachable) {
+            if (isKeyboardCursor) {
+              // Keyboard sprint cursor — yellow highlight
+              tileClass +=
+                ' border-2 border-yellow-300 bg-yellow-300/25 shadow-[0_0_0_2px_rgba(253,224,71,0.5)] cursor-pointer z-10';
+            } else if (isReachable) {
               // Reachable via card — strong movement hint
               tileClass +=
                 ' border border-cyan-200/90 bg-cyan-300/20 hover:bg-cyan-200/35 cursor-pointer shadow-[0_0_0_1px_rgba(34,211,238,0.45)]';
@@ -240,7 +280,7 @@ export function MapPanel({
                       )}
 
                       {/* Resource counter (small badge bottom-right) */}
-                      {isVisited && (
+                    {isVisited && (
                         <span
                           className={[
                             'absolute bottom-0.5 right-0.5 text-[9px] font-bold leading-none rounded px-0.5',
@@ -255,6 +295,15 @@ export function MapPanel({
                         </span>
                       )}
                     </>
+                  )}
+                  {showAdjacentMoveHint && initialMoveArrow && (
+                    <span className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                      <span
+                        className={`${firstMoveArrowClass} inline-block text-xl sm:text-2xl text-emerald-200/95 scale-110 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]`}
+                      >
+                        {initialMoveArrow}
+                      </span>
+                    </span>
                   )}
                 </button>
 
@@ -271,24 +320,9 @@ export function MapPanel({
           })
         )}
       </div>
-
-      <div className='h-4'>
-        {isMoveCard && (
-          <p className="mt-2 text-xs text-gp-mint/70 text-center animate-pulse">
-            ✨ Click a highlighted tile to move there
-          </p>
-        )}
-        {isMoveCard && nearbyAnimalTiles.size > 0 && (
-          <p className="mt-2 text-xs text-gp-mint/70 text-center animate-pulse">
-            🐾 Adjacent animals are visible in the list
-          </p>
-        )}
-        {!isMoveCard && nearbyAnimalTiles.size > 0 && (
-          <p className="mt-2 text-xs text-red-300/90 text-center animate-pulse">
-            ⚔️ Click a red-highlighted tile to attack the animal
-          </p>
-        )}
       </div>
+
+      <div className="h-4" />
     </div>
   );
 }
