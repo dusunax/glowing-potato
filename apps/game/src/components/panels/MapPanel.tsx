@@ -22,7 +22,6 @@ interface MapPanelProps {
   position: PlayerPosition;
   selectedCard: ActionCard | null;
   showPlayerMoveHint?: boolean;
-  showArrowMoveHint?: boolean;
   showFirstMoveHint?: boolean;
   onTileClick: (x: number, y: number) => void;
   mapGrid: BiomeType[][];
@@ -45,7 +44,6 @@ export function MapPanel({
   position,
   selectedCard,
   showPlayerMoveHint = false,
-  showArrowMoveHint = false,
   showFirstMoveHint = false,
   onTileClick,
   mapGrid,

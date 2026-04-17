@@ -189,7 +189,6 @@ function CollectionGame({
   const savedRef = useRef(false);
   const [showLeaderboardPopup, setShowLeaderboardPopup] = useState(false);
   const [showGameOverLog, setShowGameOverLog] = useState(false);
-  const [showArrowMoveHint, setShowArrowMoveHint] = useState(false);
   const {
     records: leaderboardRecords,
     loading: leaderboardLoading,
@@ -715,7 +714,6 @@ function CollectionGame({
     canCollectFromCurrentTile,
     keyboardMoveCursor,
     setKeyboardMoveCursor,
-    setShowArrowMoveHint,
     beltSlotData,
     handleBeltUse,
     setActiveTab,
@@ -744,7 +742,6 @@ function CollectionGame({
     canCollectFromCurrentTile,
     keyboardMoveCursor,
     setKeyboardMoveCursor,
-    setShowArrowMoveHint,
     beltSlotData,
     handleBeltUse,
     setActiveTab,
@@ -813,13 +810,11 @@ function CollectionGame({
       if (key === 'Escape') {
         s.selectCard(null);
         s.setKeyboardMoveCursor(null);
-        s.setShowArrowMoveHint(false);
         return;
       }
 
       // Enter: confirm sprint move to keyboard cursor
       if (key === 'Enter') {
-        s.setShowArrowMoveHint(false);
         if (s.keyboardMoveCursor) {
           const sprintCard =
             s.selectedCard?.type === 'sprint'
@@ -845,7 +840,6 @@ function CollectionGame({
 
         if (card.type === 'explore' || card.type === 'sprint') {
           s.selectCard(card);
-          s.setShowArrowMoveHint(true);
           return;
         }
 
@@ -889,7 +883,6 @@ function CollectionGame({
 
       event.preventDefault();
       if (event.repeat) return;
-      s.setShowArrowMoveHint(false);
 
       const moveCard =
         s.selectedCard?.type === 'explore' || s.selectedCard?.type === 'sprint'
@@ -907,7 +900,6 @@ function CollectionGame({
       );
       if (animalTarget) {
         s.handleAttackAnimal(animalTarget);
-        s.setShowArrowMoveHint(false);
         return;
       }
 
@@ -925,13 +917,11 @@ function CollectionGame({
         if (!s.canMoveTo(newCursorX, newCursorY, 2)) return;
 
         s.setKeyboardMoveCursor({ x: newCursorX, y: newCursorY });
-        s.setShowArrowMoveHint(false);
         return;
       }
 
       // Explore: immediate move
       if (!s.canMoveTo(adjX, adjY, 1)) return;
-      s.setShowArrowMoveHint(false);
       setHasMovedOnce(true);
       s.handlePlayCard(moveCard, { x: adjX, y: adjY });
     };
@@ -969,7 +959,6 @@ function CollectionGame({
           isTreasureRewardClaimed={hasClaimedTreasureReward}
           mapGrid={mapGrid}
           showFirstMoveHint={showFirstMoveHint}
-          showArrowMoveHint={showArrowMoveHint}
           showPlayerMoveHint={moveCardFlash}
           onTileClick={onMapTileClick}
           currentBiomeInfo={currentBiomeInfo}
