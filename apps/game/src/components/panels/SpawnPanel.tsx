@@ -100,7 +100,7 @@ export function SpawnPanel({
   };
 
   return (
-    <div className="flex flex-col" data-testid="spawn-panel">
+    <div className="flex flex-col min-h-0 h-full" data-testid="spawn-panel">
       <CardTitle className="mb-0.5">🌍 Spawnable Now</CardTitle>
       <p className="text-xs text-gp-mint/70 mb-1">
         {spawnable.length} item(s) available
@@ -108,7 +108,9 @@ export function SpawnPanel({
       <p className="text-[11px] text-gp-mint/50 mb-3">
         Scout points: {activeScoutLevel} • Unlock level: {unlockedLayer}/{MAX_SPAWN_REVEAL_LEVEL}
       </p>
-      <div className="space-y-3 overflow-y-auto">
+      <div
+        className="space-y-3 overflow-y-auto min-h-0 max-h-[calc(100vh-16rem)]"
+      >
         {treeNodes.map((node, index) => {
           const isLocked = !node.unlocked;
           const isSelected = selectedSpawnLayer === node.level;

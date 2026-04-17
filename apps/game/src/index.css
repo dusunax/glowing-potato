@@ -57,6 +57,62 @@ body {
   }
 }
 
+@keyframes gp-first-move-arrow-bounce-up {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes gp-first-move-arrow-bounce-down {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+@keyframes gp-first-move-arrow-bounce-left {
+  0%,
+  100% {
+    transform: translateX(0px);
+  }
+  50% {
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes gp-first-move-arrow-bounce-right {
+  0%,
+  100% {
+    transform: translateX(0px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+.gp-first-move-arrow-bounce-up {
+  animation: gp-first-move-arrow-bounce-up 1.2s ease-in-out infinite;
+}
+
+.gp-first-move-arrow-bounce-down {
+  animation: gp-first-move-arrow-bounce-down 1.2s ease-in-out infinite;
+}
+
+.gp-first-move-arrow-bounce-left {
+  animation: gp-first-move-arrow-bounce-left 1.2s ease-in-out infinite;
+}
+
+.gp-first-move-arrow-bounce-right {
+  animation: gp-first-move-arrow-bounce-right 1.2s ease-in-out infinite;
+}
+
 .gp-damage-flash-overlay {
   background: radial-gradient(circle at center, rgba(239, 68, 68, 0.42), rgba(239, 68, 68, 0.3));
   animation: gp-damage-flash 0.45s ease-out;

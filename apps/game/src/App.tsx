@@ -20,7 +20,7 @@ import { TIME_PERIOD_EMOJIS } from './constants/timePeriods';
 import { WEATHER_EMOJIS } from './constants/weather';
 import { getSeasonColor } from './utils/time';
 import { getItemById } from './data/items';
-import { TREASURE_TILE } from './data/map';
+import { TREASURE_TILE, getMazeNeighbors } from './data/map';
 import { ANIMAL_TEMPLATES_BY_NAME } from './data/animals';
 import { calculateScore } from './utils/score';
 import { tileKey } from './hooks/useMap';
@@ -189,6 +189,7 @@ function CollectionGame({
   const savedRef = useRef(false);
   const [showLeaderboardPopup, setShowLeaderboardPopup] = useState(false);
   const [showGameOverLog, setShowGameOverLog] = useState(false);
+  const [showArrowMoveHint, setShowArrowMoveHint] = useState(false);
   const {
     records: leaderboardRecords,
     loading: leaderboardLoading,
@@ -278,10 +279,13 @@ function CollectionGame({
     Array.from({ length: BELT_SLOT_COUNT }, () => null as string | null)
   );
   const [selectedBeltSlot, setSelectedBeltSlot] = useState(0);
+  const [keyboardMoveCursor, setKeyboardMoveCursor] = useState<{ x: number; y: number } | null>(null);
   const [moveCardFlash, setMoveCardFlash] = useState(false);
   const moveCardFlashTimer = useRef<number | null>(null);
   const [playerActionState, setPlayerActionState] = useState<'idle' | 'skill' | 'discover' | 'attack'>('idle');
   const playerActionStateTimer = useRef<number | null>(null);
+  const [hasMovedOnce, setHasMovedOnce] = useState(false);
+  const previousPositionRef = useRef(position);
 
   const seasonColorClass = getSeasonColor(conditions.season);
   const activeTabIndex = activeTab ? TABS.findIndex((tab) => tab.id === activeTab) : 0;
@@ -379,6 +383,7 @@ function CollectionGame({
 
     if (!selectedCard) return;
     if (selectedCard.type === 'explore' || selectedCard.type === 'sprint') {
+      setHasMovedOnce(true);
       handlePlayCard(selectedCard, { x, y });
     }
   }
@@ -547,7 +552,7 @@ function CollectionGame({
     });
   }, []);
 
-  function handleBeltUse(itemId: string) {
+  const handleBeltUse = useCallback((itemId: string) => {
     if (isPlayerDead) return;
     const stock = getQuantity(itemId);
     if (stock <= 0) return;
@@ -559,7 +564,7 @@ function CollectionGame({
       return;
     }
     handleUseItem(itemId);
-  }
+  }, [isPlayerDead, getQuantity, pushEvent, handleUseItem]);
 
   const eventLog = useMemo(() => [...events].reverse(), [events]);
   const compressedEventLog = useMemo(() => {
@@ -616,6 +621,15 @@ function CollectionGame({
   const getLabeledAnimalDisplayName = useCallback((animalName: string) => {
     return `${BIOME_PRESET_LABEL[mapBiome]} ${animalName}`;
   }, [mapBiome]);
+  const showFirstMoveHint = !hasMovedOnce;
+
+  useEffect(() => {
+    const previousPosition = previousPositionRef.current;
+    if (!hasMovedOnce && (previousPosition.x !== position.x || previousPosition.y !== position.y)) {
+      setHasMovedOnce(true);
+    }
+    previousPositionRef.current = position;
+  }, [position, hasMovedOnce]);
 
   useEffect(() => {
     if (eventLogRef.current) {
@@ -677,140 +691,11 @@ function CollectionGame({
     }
   }, [isPlayerDead]);
 
-  useEffect(() => {
-    const handleQuickUseKeydown = (event: KeyboardEvent) => {
-      if (isPlayerDead || activeTab !== 'game') return;
-      const target = event.target as HTMLElement | null;
-      if (
-        target instanceof HTMLElement &&
-        (target.tagName.toLowerCase() === 'input' ||
-          target.tagName.toLowerCase() === 'textarea' ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-
-      const key = event.key;
-      if (key >= '1' && key <= '7') {
-        if (event.repeat) return;
-        const slotIndex = Number(key);
-        const slot = beltSlotData[slotIndex];
-        if (!slot) return;
-        handleBeltUse(slot.itemId);
-      }
-    };
-
-    window.addEventListener('keydown', handleQuickUseKeydown);
-    return () => window.removeEventListener('keydown', handleQuickUseKeydown);
-  }, [activeTab, isPlayerDead, beltSlotData, handleBeltUse]);
-
   // ── Keyboard controls for map navigation and card play ────────────────────
-  useEffect(() => {
-    const handleKeydown = (event: KeyboardEvent) => {
-      if (isPlayerDead) return;
-      // Only active on the game panel (activeTab === null means game is shown)
-      if (activeTab !== null && activeTab !== 'game') return;
-
-      const kbTarget = event.target as HTMLElement | null;
-      if (
-        kbTarget instanceof HTMLElement &&
-        (kbTarget.tagName.toLowerCase() === 'input' ||
-          kbTarget.tagName.toLowerCase() === 'textarea' ||
-          kbTarget.isContentEditable)
-      ) {
-        return;
-      }
-
-      const key = event.key;
-
-      // Escape: deselect card
-      if (key === 'Escape') {
-        selectCard(null);
-        return;
-      }
-
-      // Q/W/E/R: select or play action card at hand slot 0/1/2/3
-      const CARD_KEYS: Record<string, number> = { q: 0, w: 1, e: 2, r: 3 };
-      const cardIndex = CARD_KEYS[key.toLowerCase()];
-      if (cardIndex !== undefined) {
-        if (event.repeat) return;
-        event.preventDefault();
-        const card = hand[cardIndex];
-        if (!card) return;
-
-        if (card.type === 'explore' || card.type === 'sprint') {
-          selectCard(card);
-          return;
-        }
-
-        if (card.type === 'forage' || card.type === 'lucky_forage' || card.type === 'windfall') {
-          if (isTreasureTile && !hasClaimedTreasureReward && !showTreasureRewardModal && !pendingTreasureRewardCard) {
-            depleteTileResource(position.x, position.y);
-            setHasClaimedTreasureReward(true);
-            setPendingTreasureRewardCard(card);
-            setShowTreasureRewardModal(true);
-            return;
-          }
-          if (!canCollectFromCurrentTile) return;
-        }
-
-        triggerPlayerActionState(
-          card.type === 'forage' || card.type === 'lucky_forage' || card.type === 'windfall'
-            ? 'discover'
-            : 'skill',
-        );
-        handlePlayCard(card);
-        return;
-      }
-
-      // F: attack first adjacent animal
-      if (key === 'f' || key === 'F') {
-        if (adjacentAnimals.length === 0) return;
-        event.preventDefault();
-        if (event.repeat) return;
-        handleAttackAnimal(adjacentAnimals[0]!);
-        return;
-      }
-
-      // Arrow keys: map movement (auto-picks the move card)
-      let dx = 0;
-      let dy = 0;
-      if (key === 'ArrowUp') dy = -1;
-      else if (key === 'ArrowDown') dy = 1;
-      else if (key === 'ArrowLeft') dx = -1;
-      else if (key === 'ArrowRight') dx = 1;
-      else return;
-
-      event.preventDefault();
-      if (event.repeat) return;
-
-      const targetX = position.x + dx;
-      const targetY = position.y + dy;
-
-      // Attack an adjacent animal in that direction if present
-      const animalTarget = adjacentAnimals.find(
-        (a) => a.position.x === targetX && a.position.y === targetY,
-      );
-      if (animalTarget) {
-        handleAttackAnimal(animalTarget);
-        return;
-      }
-
-      // Move through the maze passage
-      if (!canMoveTo(targetX, targetY, 1)) return;
-
-      const moveCard =
-        selectedCard?.type === 'explore' || selectedCard?.type === 'sprint'
-          ? selectedCard
-          : hand.find((c) => c.type === 'explore' || c.type === 'sprint') ?? null;
-      if (!moveCard) return;
-
-      handlePlayCard(moveCard, { x: targetX, y: targetY });
-    };
-
-    window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
-  }, [
+  // Use a ref to hold the latest values so the event listener never goes stale
+  // and can be registered exactly once (empty dep array). This prevents the
+  // brief "no listener" window that caused digit keys to be silently dropped.
+  const kbStateRef = useRef({
     isPlayerDead,
     activeTab,
     hand,
@@ -828,14 +713,250 @@ function CollectionGame({
     pendingTreasureRewardCard,
     depleteTileResource,
     canCollectFromCurrentTile,
-  ]);
+    keyboardMoveCursor,
+    setKeyboardMoveCursor,
+    setShowArrowMoveHint,
+    beltSlotData,
+    handleBeltUse,
+    setActiveTab,
+    setHasClaimedTreasureReward,
+    setPendingTreasureRewardCard,
+    setShowTreasureRewardModal,
+  });
+  // Synchronously update the ref every render so the handler always reads fresh values.
+  kbStateRef.current = {
+    isPlayerDead,
+    activeTab,
+    hand,
+    selectedCard,
+    position,
+    canMoveTo,
+    selectCard,
+    handlePlayCard,
+    triggerPlayerActionState,
+    adjacentAnimals,
+    handleAttackAnimal,
+    isTreasureTile,
+    hasClaimedTreasureReward,
+    showTreasureRewardModal,
+    pendingTreasureRewardCard,
+    depleteTileResource,
+    canCollectFromCurrentTile,
+    keyboardMoveCursor,
+    setKeyboardMoveCursor,
+    setShowArrowMoveHint,
+    beltSlotData,
+    handleBeltUse,
+    setActiveTab,
+    setHasClaimedTreasureReward,
+    setPendingTreasureRewardCard,
+    setShowTreasureRewardModal,
+  };
+
+  useEffect(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      const s = kbStateRef.current;
+
+      const kbTarget = event.target as HTMLElement | null;
+      if (
+        kbTarget instanceof HTMLElement &&
+        (kbTarget.tagName.toLowerCase() === 'input' ||
+          kbTarget.tagName.toLowerCase() === 'textarea' ||
+          kbTarget.isContentEditable)
+      ) {
+        return;
+      }
+
+      // Prevent browser defaults for physical QWER + ZXCV keys before any game-state checks.
+      // Covers English (r/x/…), Korean IME (ㄱ/ㅌ/…), and IME composition ('Process') simultaneously.
+      // ZXCV guard excludes modifier combos (Ctrl+Z undo, Ctrl+X cut, etc.).
+      const QWER_CODES = new Set(['KeyQ', 'KeyW', 'KeyE', 'KeyR']);
+      if (QWER_CODES.has(event.code)) {
+        event.preventDefault();
+      }
+      const ZXCV_CODES = new Set(['KeyZ', 'KeyX', 'KeyC', 'KeyV']);
+      if (ZXCV_CODES.has(event.code) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+      }
+
+      const key = event.key;
+
+      // Belt quick-use: Z/X/C/V keys map to belt slots 0–3 (works when game is active)
+      // Korean layout equivalents: ㅋ/ㅌ/ㅊ/ㅍ (same physical keys)
+      const BELT_KEYS: Record<string, number> = { z: 0, x: 1, c: 2, v: 3, ㅋ: 0, ㅌ: 1, ㅊ: 2, ㅍ: 3 };
+      if (!s.isPlayerDead && (s.activeTab === null || s.activeTab === 'game') && !event.ctrlKey && !event.metaKey) {
+        const beltKeyIndex = BELT_KEYS[key.toLowerCase()];
+        if (beltKeyIndex !== undefined) {
+          event.preventDefault();
+          if (!event.repeat) {
+            const slot = s.beltSlotData[beltKeyIndex];
+            if (slot) s.handleBeltUse(slot.itemId);
+          }
+          return;
+        }
+      }
+
+      // Tab: cycle through tabs (works from any tab)
+      if (key === 'Tab') {
+        event.preventDefault();
+        const currentIndex = s.activeTab ? TABS.findIndex((t) => t.id === s.activeTab) : 0;
+        const nextIndex = (currentIndex + 1) % TABS.length;
+        s.setActiveTab(nextIndex === 0 ? null : TABS[nextIndex]!.id);
+        return;
+      }
+
+      if (s.isPlayerDead) return;
+      // Only active on the game panel (activeTab === null means game is shown)
+      if (s.activeTab !== null && s.activeTab !== 'game') return;
+
+      // Escape: deselect card and clear sprint cursor
+      if (key === 'Escape') {
+        s.selectCard(null);
+        s.setKeyboardMoveCursor(null);
+        s.setShowArrowMoveHint(false);
+        return;
+      }
+
+      // Enter: confirm sprint move to keyboard cursor
+      if (key === 'Enter') {
+        s.setShowArrowMoveHint(false);
+        if (s.keyboardMoveCursor) {
+          const sprintCard =
+            s.selectedCard?.type === 'sprint'
+              ? s.selectedCard
+              : s.hand.find((c) => c.type === 'sprint') ?? null;
+          if (sprintCard) {
+            setHasMovedOnce(true);
+            s.handlePlayCard(sprintCard, s.keyboardMoveCursor);
+            s.setKeyboardMoveCursor(null);
+          }
+        }
+        return;
+      }
+
+      // Q/W/E/R: select or play action card at hand slot 0/1/2/3
+      const CARD_KEYS: Record<string, number> = { q: 0, w: 1, e: 2, r: 3, ㅂ: 0, ㅈ: 1, ㄷ: 2, ㄱ: 3 };
+      const cardIndex = CARD_KEYS[key.toLowerCase()];
+      if (cardIndex !== undefined) {
+        event.preventDefault();
+        if (event.repeat) return;
+        const card = s.hand[cardIndex];
+        if (!card) return;
+
+        if (card.type === 'explore' || card.type === 'sprint') {
+          s.selectCard(card);
+          s.setShowArrowMoveHint(true);
+          return;
+        }
+
+        if (card.type === 'forage' || card.type === 'lucky_forage' || card.type === 'windfall') {
+          if (s.isTreasureTile && !s.hasClaimedTreasureReward && !s.showTreasureRewardModal && !s.pendingTreasureRewardCard) {
+            s.depleteTileResource(s.position.x, s.position.y);
+            s.setHasClaimedTreasureReward(true);
+            s.setPendingTreasureRewardCard(card);
+            s.setShowTreasureRewardModal(true);
+            return;
+          }
+          if (!s.canCollectFromCurrentTile) return;
+        }
+
+        s.triggerPlayerActionState(
+          card.type === 'forage' || card.type === 'lucky_forage' || card.type === 'windfall'
+            ? 'discover'
+            : 'skill',
+        );
+        s.handlePlayCard(card);
+        return;
+      }
+
+      // F: attack first adjacent animal
+      if (key === 'f' || key === 'F') {
+        if (s.adjacentAnimals.length === 0) return;
+        event.preventDefault();
+        if (event.repeat) return;
+        s.handleAttackAnimal(s.adjacentAnimals[0]!);
+        return;
+      }
+
+      // Arrow keys: map movement (auto-picks the move card)
+      let dx = 0;
+      let dy = 0;
+      if (key === 'ArrowUp') dy = -1;
+      else if (key === 'ArrowDown') dy = 1;
+      else if (key === 'ArrowLeft') dx = -1;
+      else if (key === 'ArrowRight') dx = 1;
+      else return;
+
+      event.preventDefault();
+      if (event.repeat) return;
+      s.setShowArrowMoveHint(false);
+
+      const moveCard =
+        s.selectedCard?.type === 'explore' || s.selectedCard?.type === 'sprint'
+          ? s.selectedCard
+          : s.hand.find((c) => c.type === 'explore' || c.type === 'sprint') ?? null;
+      if (!moveCard) return;
+
+      const isSprint = moveCard.type === 'sprint';
+
+      // Attack adjacent animal first regardless of card type
+      const adjX = s.position.x + dx;
+      const adjY = s.position.y + dy;
+      const animalTarget = s.adjacentAnimals.find(
+        (a) => a.position.x === adjX && a.position.y === adjY,
+      );
+      if (animalTarget) {
+        s.handleAttackAnimal(animalTarget);
+        s.setShowArrowMoveHint(false);
+        return;
+      }
+
+      if (isSprint) {
+        // Sprint: step-by-step cursor navigation via arrow keys, confirm with Enter
+        const cursorBase = s.keyboardMoveCursor ?? s.position;
+        const newCursorX = cursorBase.x + dx;
+        const newCursorY = cursorBase.y + dy;
+
+        // Must be a valid maze passage from the current cursor base
+        const neighbors = getMazeNeighbors(cursorBase.x, cursorBase.y);
+        if (!neighbors.some((n) => n.x === newCursorX && n.y === newCursorY)) return;
+
+        // Must be within sprint range (2 steps) from player
+        if (!s.canMoveTo(newCursorX, newCursorY, 2)) return;
+
+        s.setKeyboardMoveCursor({ x: newCursorX, y: newCursorY });
+        s.setShowArrowMoveHint(false);
+        return;
+      }
+
+      // Explore: immediate move
+      if (!s.canMoveTo(adjX, adjY, 1)) return;
+      s.setShowArrowMoveHint(false);
+      setHasMovedOnce(true);
+      s.handlePlayCard(moveCard, { x: adjX, y: adjY });
+    };
+
+    window.addEventListener('keydown', handleKeydown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeydown, { capture: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset sprint cursor when the selected card is no longer sprint
+  useEffect(() => {
+    if (selectedCard?.type !== 'sprint') {
+      setKeyboardMoveCursor(null);
+    }
+  }, [selectedCard]);
+
+  const onMapTileClick = (x: number, y: number) => {
+    onTileClick(x, y);
+  };
 
   const emptySlotClass = 'min-h-[64px] border border-dashed border-gp-mint/55 rounded-lg';
   const emptySlotStyle = {
     background: 'linear-gradient(180deg, rgba(var(--gp-bg), 0.82) 0%, rgba(var(--gp-bg), 0.65) 100%)',
     boxShadow: 'inset 0 0 0 1px rgba(var(--gp-accent), 0.25)',
   };
-
+  
   // HP bar colour
   const hpRatio = playerHp / maxPlayerHp;
   const hpColor = hpRatio > 0.6 ? 'bg-emerald-400' : hpRatio > 0.3 ? 'bg-amber-400' : 'bg-red-500';
@@ -847,8 +968,10 @@ function CollectionGame({
           selectedCard={selectedCard}
           isTreasureRewardClaimed={hasClaimedTreasureReward}
           mapGrid={mapGrid}
+          showFirstMoveHint={showFirstMoveHint}
+          showArrowMoveHint={showArrowMoveHint}
           showPlayerMoveHint={moveCardFlash}
-          onTileClick={onTileClick}
+          onTileClick={onMapTileClick}
           currentBiomeInfo={currentBiomeInfo}
           canMoveTo={canMoveTo}
           visitedTiles={visitedTiles}
@@ -860,6 +983,7 @@ function CollectionGame({
           equippedWeaponEmoji={equippedWeaponItem?.emoji}
           equippedWeaponName={equippedWeaponItem?.name}
           playerActionState={playerActionState}
+          keyboardMoveCursor={keyboardMoveCursor}
         />
         <div className="bg-gp-surface border border-gp-accent/30 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
@@ -869,7 +993,8 @@ function CollectionGame({
         <div className="grid grid-cols-8 gap-2">
             {beltSlotData.map((slot, index) => {
               const isWeaponSlot = index === WEAPON_BELT_SLOT_INDEX;
-              const slotLabel = isWeaponSlot ? 'W' : `${index}`;
+              const BELT_KEY_LABELS: Record<number, string> = { 0: '⚔️', 1: 'X', 2: 'C', 3: 'V' };
+              const slotLabel = BELT_KEY_LABELS[index] ?? '';
               if (!slot) {
                 return (
                   <button
@@ -959,18 +1084,10 @@ function CollectionGame({
           </div>
           {isTargetingCard && (
             <div className="mt-3 flex items-center justify-center gap-3">
-              <p className="text-xs text-gp-mint/70">
-                Click a highlighted tile on the map to move there, or use Arrow Keys
-              </p>
               <Button variant="ghost" size="sm" onClick={() => selectCard(null)}>
                 Cancel [Esc]
               </Button>
             </div>
-          )}
-          {!isTargetingCard && (
-            <p className="mt-2 text-[10px] text-gp-mint/40 text-center">
-              ⌨️ Q/W/E/R: cards · Arrow keys: move · F: attack · 1–7: belt
-            </p>
           )}
         </div>
 
@@ -1329,13 +1446,18 @@ function CollectionGame({
                       canUseInBelt={canUseItem}
                     />
                   </section>
-                  <section className="w-full shrink-0">
-                    <CraftingPanel recipes={recipes} canCraft={canCraft} onCraft={handleCraftWithAutoEquip} getQuantity={getQuantity} />
+                  <section className="w-full shrink-0 h-full min-h-0">
+                    <CraftingPanel
+                      recipes={recipes}
+                      canCraft={canCraft}
+                      onCraft={handleCraftWithAutoEquip}
+                      getQuantity={getQuantity}
+                    />
                   </section>
                   <section className="w-full shrink-0">
                     <DiscoveryPanel discovered={discovered} />
                   </section>
-                  <section className="w-full shrink-0">
+                  <section className="w-full shrink-0 h-full min-h-0">
                     <SpawnPanel
                       conditions={conditions}
                       biomeType={currentBiomeInfo.type}
@@ -1368,6 +1490,8 @@ export default function App() {
   const [collectionBiome, setCollectionBiome] = useState<MapBiomePreset>('meadow');
   const [signInError, setSignInError] = useState<string | null>(null);
   const { user, nickname, loading, signInWithGoogle, signOut, updateNickname } = useAuth();
+
+
 
   async function handleSignIn() {
     setSignInError(null);
